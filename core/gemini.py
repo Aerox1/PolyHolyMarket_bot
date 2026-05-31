@@ -70,7 +70,7 @@ def _call_gemini_image(prompt: str, attempts: int = 3) -> tuple[bytes, str]:
     last_exc: Exception | None = None
     for attempt in range(1, attempts + 1):
         try:
-            with httpx.Client(timeout=90) as client:
+            with httpx.Client(timeout=90, trust_env=settings.gemini_trust_env) as client:
                 r = client.post(url, headers=headers, json=body)
                 r.raise_for_status()
                 data = r.json()

@@ -11,12 +11,25 @@ from __future__ import annotations
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager, contextmanager
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from core.config import settings
 from db.models import Base
+
+
+def _sqlite_pragmas(dbapi_conn, _record) -> None:
+    """WAL + busy_timeout so multiple processes (bot/webapp/dashboard) can share
+    a single SQLite file in local dev without 'database is locked' errors."""
+    cur = dbapi_conn.cursor()
+    cur.execute("PRAGMA journal_mode=WAL")
+    cur.execute("PRAGMA busy_timeout=5000")
+    cur.execute("PRAGMA synchronous=NORMAL")
+    cur.close()
+
+
+_IS_SQLITE = settings.database_url.startswith("sqlite")
 
 # ── Sync (dashboard / worker / alembic / tests) ──────────────────────────────
 
@@ -27,6 +40,8 @@ engine = create_engine(
     max_overflow=20,
     future=True,
 )
+if _IS_SQLITE:
+    event.listen(engine, "connect", _sqlite_pragmas)
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False, class_=Session)
 
 
@@ -53,6 +68,8 @@ def async_engine():
     global _async_engine
     if _async_engine is None:
         _async_engine = create_async_engine(settings.async_database_url, pool_pre_ping=True, future=True)
+        if _IS_SQLITE:
+            event.listen(_async_engine.sync_engine, "connect", _sqlite_pragmas)
     return _async_engine
 
 

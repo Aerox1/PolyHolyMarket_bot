@@ -12,11 +12,14 @@ import asyncio
 import logging
 
 from core import gemini
+from core.config import settings
 from db.engine import async_session_scope
-from db.repositories import categories as categories_repo
+from db.repositories import appconfig, categories as categories_repo, gemini_usage
 from polymarket import markets
 
 logger = logging.getLogger(__name__)
+
+_GEN_DELAY_SECONDS = 1.5  # spacing between image calls to avoid rate limits
 
 
 async def sync_categories(limit: int = 30) -> int:
@@ -32,15 +35,25 @@ async def sync_categories(limit: int = 30) -> int:
 
 
 async def generate_pending_images(max_images: int = 30) -> int:
-    """Generate images for categories missing one, until budget or max is hit."""
+    """Generate images for categories missing one.
+
+    Stops when the weekly budget is reached, but a transient per-image failure
+    just skips that category and continues (so one flaky call doesn't halt the
+    whole batch)."""
     generated = 0
+    cost = settings.gemini_image_cost_usd
     async with async_session_scope() as session:
         pending = await categories_repo.needing_images(session, limit=max_images)
-        for cat in pending:
-            path = await gemini.generate_category_image(session, cat)
-            if path is None:
-                # budget exhausted or generation unavailable — stop early
+        budget = await appconfig.get_float(session, appconfig.GEMINI_WEEKLY_BUDGET, settings.gemini_weekly_budget_usd)
+        for i, cat in enumerate(pending):
+            if await gemini_usage.weekly_spend(session) + cost > budget:
+                logger.info("Gemini weekly budget reached — stopping image generation")
                 break
-            generated += 1
+            if i:
+                await asyncio.sleep(_GEN_DELAY_SECONDS)
+            path = await gemini.generate_category_image(session, cat)
+            if path:
+                generated += 1
+            # else: transient failure (or this one over budget) — skip, continue
     logger.info("Generated %d category images", generated)
     return generated

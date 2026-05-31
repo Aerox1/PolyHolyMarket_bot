@@ -64,6 +64,10 @@ class Settings(BaseSettings):
     # ── Gemini (category card images) ─────────────────────
     gemini_api_key: str = Field("", alias="GEMINI_API_KEY")
     gemini_image_model: str = Field("gemini-2.5-flash-image", alias="GEMINI_IMAGE_MODEL")
+    # Ignore system/env proxies for the Gemini call (most deploys have direct
+    # egress to Google; a macOS system proxy / VPN otherwise breaks it). Set true
+    # only if you MUST route Gemini through a proxy.
+    gemini_trust_env: bool = Field(False, alias="GEMINI_TRUST_ENV")
     # Estimated USD cost per generated image — used for budget accounting.
     gemini_image_cost_usd: float = Field(0.04, alias="GEMINI_IMAGE_COST_USD")
     # Default weekly budget (USD). The live value is editable in the admin
