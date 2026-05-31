@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% from "_macros.html" import status_pill, addr, dt, num with context %}
+{% set active_nav = 'users' %}
+{% block title %}{{ t('dash.users.title') }}{% endblock %}
+
+{% block content %}
+  <div class="page-head">
+    <h1 class="page-title">{{ t('dash.users.title') }}</h1>
+  </div>
+
+  <form class="toolbar" method="GET" action="/users">
+    <input class="input" type="search" name="q" value="{{ q or '' }}"
+           placeholder="{{ t('dash.users.search_placeholder') }}">
+    <select class="select" name="status">
+      <option value="" {% if not status_filter %}selected{% endif %}>{{ t('dash.users.filter_all') }}</option>
+      <option value="active" {% if status_filter == 'active' %}selected{% endif %}>{{ t('dash.users.status_active') }}</option>
+      <option value="suspended" {% if status_filter == 'suspended' %}selected{% endif %}>{{ t('dash.users.status_suspended') }}</option>
+      <option value="banned" {% if status_filter == 'banned' %}selected{% endif %}>{{ t('dash.users.status_banned') }}</option>
+    </select>
+    <button class="btn primary" type="submit">{{ t('dash.common.search') }}</button>
+  </form>
+
+  <div class="card">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>{{ t('dash.users.telegram_id') }}</th>
+            <th>{{ t('dash.users.username') }}</th>
+            <th>{{ t('dash.users.language') }}</th>
+            <th>{{ t('dash.users.status') }}</th>
+            <th class="right">{{ t('dash.users.accounts') }}</th>
+            <th>{{ t('dash.users.last_seen') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for u in users %}
+          <tr class="clickable" data-href="/users/{{ u.id }}">
+            <td><bdi class="mono ltr">{{ u.telegram_id }}</bdi></td>
+            <td>{% if u.username %}<a href="/users/{{ u.id }}">{{ u.username }}</a>{% else %}<span class="muted">—</span>{% endif %}</td>
+            <td><bdi class="ltr">{{ u.language or '—' }}</bdi></td>
+            <td>{{ status_pill(u.status) }}</td>
+            <td class="right">{{ num(u.account_count) }}</td>
+            <td>{{ dt(u.last_seen_at) }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6"><div class="empty">{{ t('dash.users.none') }}</div></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="pager">
+    {% set base = '/users?q=' ~ (q or '') ~ '&status=' ~ (status_filter or '') %}
+    {% if page > 1 %}
+      <a class="btn sm" href="{{ base }}&page={{ page - 1 }}">{{ t('dash.common.prev') }}</a>
+    {% else %}
+      <span class="btn sm" aria-disabled="true" style="opacity:.4; pointer-events:none;">{{ t('dash.common.prev') }}</span>
+    {% endif %}
+    <span class="page-info">{{ t('dash.common.page') }} <bdi class="ltr">{{ page }}</bdi>
+      {% if total is not none %}· <bdi class="ltr">{{ total }}</bdi>{% endif %}</span>
+    {% if has_next %}
+      <a class="btn sm" href="{{ base }}&page={{ page + 1 }}">{{ t('dash.common.next') }}</a>
+    {% else %}
+      <span class="btn sm" aria-disabled="true" style="opacity:.4; pointer-events:none;">{{ t('dash.common.next') }}</span>
+    {% endif %}
+  </div>
+{% endblock %}

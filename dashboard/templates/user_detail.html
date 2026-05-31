@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+{% from "_macros.html" import status_pill, mode_badge, addr, dt, money, num with context %}
+{% set active_nav = 'users' %}
+{% set u = detail.user %}
+{% block title %}{{ t('dash.users.detail_title') }}{% endblock %}
+
+{% block content %}
+  <div class="page-head">
+    <h1 class="page-title">
+      {{ t('dash.users.detail_title') }}
+      {% if u.username %}· {{ u.username }}{% endif %}
+    </h1>
+    <a class="btn sm" href="/users">{{ t('dash.users.back_to_list') }}</a>
+  </div>
+
+  {# ── Profile + status control ─────────────────────────────────────────── #}
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-header"><h2>{{ t('dash.users.profile') }}</h2>{{ status_pill(u.status) }}</div>
+      <div class="card-body">
+        <dl class="dl">
+          <dt>{{ t('dash.users.telegram_id') }}</dt><dd><bdi class="mono ltr">{{ u.telegram_id }}</bdi></dd>
+          <dt>{{ t('dash.users.username') }}</dt><dd>{{ u.username or '—' }}</dd>
+          <dt>{{ t('dash.users.first_name') }}</dt><dd>{{ u.first_name or '—' }}</dd>
+          <dt>{{ t('dash.users.language') }}</dt><dd><bdi class="ltr">{{ u.language or '—' }}</bdi></dd>
+          <dt>{{ t('dash.users.created') }}</dt><dd>{{ dt(u.created_at) }}</dd>
+          <dt>{{ t('dash.users.last_seen') }}</dt><dd>{{ dt(u.last_seen_at) }}</dd>
+        </dl>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h2>{{ t('dash.users.change_status') }}</h2></div>
+      <div class="card-body">
+        <form method="POST" action="/users/{{ u.id }}/status"
+              data-confirm="{{ t('dash.users.confirm_status') }}"
+              style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="btn success" type="submit" name="status" value="active"
+                  {% if u.status == 'active' %}disabled{% endif %}>{{ t('dash.users.activate') }}</button>
+          <button class="btn warn" type="submit" name="status" value="suspended"
+                  {% if u.status == 'suspended' %}disabled{% endif %}>{{ t('dash.users.suspend') }}</button>
+          <button class="btn danger" type="submit" name="status" value="banned"
+                  {% if u.status == 'banned' %}disabled{% endif %}>{{ t('dash.users.ban') }}</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  {# ── Accounts (public columns only — NEVER any key) ───────────────────── #}
+  <div class="card">
+    <div class="card-header"><h2>{{ t('dash.users.accounts') }}</h2></div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>{{ t('dash.users.label') }}</th>
+            <th>{{ t('dash.users.wallet') }}</th>
+            <th>{{ t('dash.users.mode') }}</th>
+            <th>{{ t('dash.users.status') }}</th>
+            <th>{{ t('dash.users.last_synced') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for a in detail.accounts %}
+          <tr>
+            <td>{{ a.label or '—' }}</td>
+            <td>{{ addr(a.wallet_address) }}</td>
+            <td>{{ mode_badge(a.mode) }}</td>
+            <td>{{ status_pill(a.status) }}</td>
+            <td>{{ dt(a.last_synced_at) }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5"><div class="empty">{{ t('dash.users.no_accounts') }}</div></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {# ── Live positions (public Data API, by wallet address) ──────────────── #}
+  <div class="card">
+    <div class="card-header"><h2>{{ t('dash.users.positions') }}</h2></div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>{{ t('dash.users.market') }}</th>
+            <th>{{ t('dash.users.outcome') }}</th>
+            <th class="right">{{ t('dash.users.size') }}</th>
+            <th class="right">{{ t('dash.users.avg_price') }}</th>
+            <th class="right">{{ t('dash.users.value') }}</th>
+            <th class="right">{{ t('dash.users.pnl') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in positions %}
+          <tr>
+            <td>{{ p.get('title') or p.get('market') or addr(p.get('asset') or p.get('conditionId')) }}</td>
+            <td>{{ p.get('outcome') or '—' }}</td>
+            <td class="right">{{ num(p.get('size')) }}</td>
+            <td class="right">{{ money(p.get('avgPrice')) }}</td>
+            <td class="right">{{ money(p.get('currentValue') if p.get('currentValue') is not none else p.get('curValue')) }}</td>
+            <td class="right">{{ money(p.get('cashPnl') if p.get('cashPnl') is not none else p.get('pnl')) }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6"><div class="empty">{{ t('dash.users.no_positions') }}</div></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {# ── Orders + Trades ──────────────────────────────────────────────────── #}
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-header"><h2>{{ t('dash.users.orders') }}</h2></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>{{ t('dash.users.token') }}</th>
+              <th>{{ t('dash.users.side') }}</th>
+              <th class="right">{{ t('dash.users.price') }}</th>
+              <th class="right">{{ t('dash.users.size') }}</th>
+              <th>{{ t('dash.users.status') }}</th>
+              <th>{{ t('dash.users.created') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for o in detail.orders %}
+            <tr>
+              <td>{{ addr(o.token_id) }}</td>
+              <td><span class="pill {{ (o.side or '') | lower }}">{{ o.side or '—' }}</span></td>
+              <td class="right">{{ money(o.price) }}</td>
+              <td class="right">{{ num(o.size) }}</td>
+              <td><span class="pill muted">{{ o.status or '—' }}</span></td>
+              <td>{{ dt(o.created_at) }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6"><div class="empty">{{ t('dash.users.no_orders') }}</div></td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h2>{{ t('dash.users.trades') }}</h2></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>{{ t('dash.users.token') }}</th>
+              <th>{{ t('dash.users.side') }}</th>
+              <th class="right">{{ t('dash.users.price') }}</th>
+              <th class="right">{{ t('dash.users.size') }}</th>
+              <th class="right">{{ t('dash.users.pnl') }}</th>
+              <th>{{ t('dash.users.executed') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for tr in detail.trades %}
+            <tr>
+              <td>{{ addr(tr.token_id) }}</td>
+              <td><span class="pill {{ (tr.side or '') | lower }}">{{ tr.side or '—' }}</span></td>
+              <td class="right">{{ money(tr.price) }}</td>
+              <td class="right">{{ num(tr.size) }}</td>
+              <td class="right">{{ money(tr.pnl) }}</td>
+              <td>{{ dt(tr.executed_at) }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6"><div class="empty">{{ t('dash.users.no_trades') }}</div></td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+{% endblock %}

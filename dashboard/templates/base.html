@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="{{ lang }}" dir="{{ dir }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>{% block title %}{{ t('dash.metrics.title') }}{% endblock %} · Polymarket Admin</title>
+  <link rel="stylesheet" href="/static/css/theme.css">
+  <link rel="stylesheet" href="/static/css/rtl.css">
+</head>
+<body>
+
+  <div class="topbar">
+    <div class="shell topbar-inner">
+      <a href="/metrics" class="brand">Poly<span>market</span></a>
+      <nav class="nav-tabs">
+        <a class="nav-tab {% if active_nav == 'metrics' %}active{% endif %}" href="/metrics">{{ t('dash.nav.metrics') }}</a>
+        <a class="nav-tab {% if active_nav == 'users' %}active{% endif %}" href="/users">{{ t('dash.nav.users') }}</a>
+        <a class="nav-tab {% if active_nav == 'audit' %}active{% endif %}" href="/audit">{{ t('dash.nav.audit') }}</a>
+        {% if admin and admin.is_superadmin %}
+        <a class="nav-tab {% if active_nav == 'broadcast' %}active{% endif %}" href="/broadcast">{{ t('dash.nav.broadcast') }}</a>
+        {% endif %}
+        <a class="nav-tab {% if active_nav == 'settings' %}active{% endif %}" href="/settings">{{ t('dash.nav.settings') }}</a>
+      </nav>
+      <div class="topbar-right">
+        <form class="lang-switch" method="POST" action="/me/language">
+          {% for code in supported_langs %}
+          <button type="submit" name="lang" value="{{ code }}"
+                  class="{% if code == lang %}active{% endif %}"
+                  title="{{ code }}">{{ code | upper }}</button>
+          {% endfor %}
+        </form>
+        {% if admin %}
+        <span class="mono" dir="ltr">{{ admin.username }}</span>
+        <a class="btn sm" href="/logout">{{ t('dash.nav.logout') }}</a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <main class="shell main">
+    {% block content %}{% endblock %}
+  </main>
+
+  <script src="/static/js/ui.js"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

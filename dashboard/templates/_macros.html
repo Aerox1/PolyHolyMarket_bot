@@ -1,0 +1,48 @@
+{# Shared presentational macros. Import with:
+   {% from "_macros.html" import status_pill, mode_badge, addr, dt, money with context %} #}
+
+{# Status pill — maps a UserStatus/AccountStatus value to a colored pill.
+   Labels come from dash.users.status_* keys via the injected t(). #}
+{% macro status_pill(status) %}
+  {%- set s = (status or 'active') | lower -%}
+  <span class="status-pill {{ s }}">{{ t('dash.users.status_' ~ s) }}</span>
+{% endmacro %}
+
+{# Mode badge — live / demo etc. #}
+{% macro mode_badge(mode) %}
+  {%- set m = (mode or '') | lower -%}
+  <span class="mode-badge {{ m }}"><bdi class="ltr">{{ mode or '—' }}</bdi></span>
+{% endmacro %}
+
+{# Wallet / token address, truncated, never visually reversed in RTL. #}
+{% macro addr(value, head=6, tail=4) %}
+  {%- if value -%}
+    {%- set v = value | string -%}
+    {%- if v | length > (head + tail + 2) -%}
+      <bdi class="mono ltr" title="{{ v }}">{{ v[:head] }}…{{ v[-tail:] }}</bdi>
+    {%- else -%}
+      <bdi class="mono ltr">{{ v }}</bdi>
+    {%- endif -%}
+  {%- else -%}—{%- endif -%}
+{% endmacro %}
+
+{# Datetime — ISO-ish, kept LTR. Accepts a datetime or None. #}
+{% macro dt(value) %}
+  {%- if value -%}
+    <bdi class="mono ltr">{{ value.strftime('%Y-%m-%d %H:%M') if value.strftime is defined else value }}</bdi>
+  {%- else -%}<span class="muted">{{ t('dash.common.never') }}</span>{%- endif -%}
+{% endmacro %}
+
+{# Money / numeric — tabular, LTR, optional +/- coloring. #}
+{% macro money(value, prefix='$') %}
+  {%- if value is none -%}—
+  {%- else -%}
+    {%- set cls = 'pos' if value > 0 else ('neg' if value < 0 else '') -%}
+    <bdi class="num ltr {{ cls }}">{{ prefix }}{{ '%.2f' | format(value | float) }}</bdi>
+  {%- endif -%}
+{% endmacro %}
+
+{# Plain number, LTR/tabular. #}
+{% macro num(value) %}
+  {%- if value is none -%}—{%- else -%}<bdi class="num ltr">{{ value }}</bdi>{%- endif -%}
+{% endmacro %}

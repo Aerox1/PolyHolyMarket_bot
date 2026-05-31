@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% set active_nav = 'metrics' %}
+{% block title %}{{ t('dash.metrics.title') }}{% endblock %}
+
+{% block content %}
+  <div class="page-head">
+    <h1 class="page-title">{{ t('dash.metrics.title') }}</h1>
+  </div>
+
+  <div class="metrics">
+    <div class="metric">
+      <div class="metric-label">{{ t('dash.metrics.total_users') }}</div>
+      <div class="metric-value"><bdi class="ltr">{{ metrics.total_users }}</bdi></div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">{{ t('dash.metrics.active_users') }}</div>
+      <div class="metric-value green"><bdi class="ltr">{{ metrics.active_users }}</bdi></div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">{{ t('dash.metrics.suspended_users') }}</div>
+      <div class="metric-value yellow"><bdi class="ltr">{{ metrics.suspended_users }}</bdi></div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">{{ t('dash.metrics.banned_users') }}</div>
+      <div class="metric-value red"><bdi class="ltr">{{ metrics.banned_users }}</bdi></div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">{{ t('dash.metrics.total_accounts') }}</div>
+      <div class="metric-value blue"><bdi class="ltr">{{ metrics.total_accounts }}</bdi></div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">{{ t('dash.metrics.trades_today') }}</div>
+      <div class="metric-value"><bdi class="ltr">{{ metrics.trades_today }}</bdi></div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">{{ t('dash.metrics.new_users_today') }}</div>
+      <div class="metric-value"><bdi class="ltr">{{ metrics.new_users_today }}</bdi></div>
+    </div>
+  </div>
+{% endblock %}

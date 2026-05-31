@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% set active_nav = 'broadcast' %}
+{% block title %}{{ t('dash.broadcast.title') }}{% endblock %}
+
+{% block content %}
+  <div class="page-head">
+    <h1 class="page-title">{{ t('dash.broadcast.title') }}</h1>
+  </div>
+
+  {% if sent_count is not none %}
+  <div class="notice success">{{ t('dash.broadcast.sent', count=sent_count) }}</div>
+  {% endif %}
+
+  <div class="card">
+    <div class="card-body">
+      <form method="POST" action="/broadcast"
+            data-confirm="{{ t('dash.broadcast.confirm') }}">
+        <div class="field">
+          <label for="message">{{ t('dash.broadcast.message') }}</label>
+          <textarea class="textarea" id="message" name="message" required
+                    placeholder="{{ t('dash.broadcast.message') }}"></textarea>
+        </div>
+
+        <div class="field" style="max-width:240px;">
+          <label for="language">{{ t('dash.broadcast.by_language') }}</label>
+          <select class="select" id="language" name="language">
+            <option value="">{{ t('dash.broadcast.all_languages') }}</option>
+            {% for code in supported_langs %}
+            <option value="{{ code }}">{{ code | upper }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="checkbox-row">
+          <input type="checkbox" id="only_active" name="only_active" value="1" checked>
+          <label for="only_active">{{ t('dash.broadcast.target_active') }}</label>
+        </div>
+
+        <button class="btn primary" type="submit">{{ t('dash.broadcast.send') }}</button>
+      </form>
+    </div>
+  </div>
+{% endblock %}

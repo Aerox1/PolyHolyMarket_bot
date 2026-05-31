@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="{{ lang }}" dir="{{ dir }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>{{ t('dash.login.title') }} · Polymarket Admin</title>
+  <link rel="stylesheet" href="/static/css/theme.css">
+  <link rel="stylesheet" href="/static/css/rtl.css">
+</head>
+<body>
+  <div class="login-wrap">
+    <div class="login-card">
+      <div class="brand">Poly<span>market</span></div>
+      <div class="login-sub">{{ t('dash.login.title') }}</div>
+
+      {% if error %}
+      <div class="login-error">{{ error }}</div>
+      {% endif %}
+
+      <form method="POST" action="/login">
+        <div class="field">
+          <label for="username">{{ t('dash.login.username') }}</label>
+          <input class="input mono" id="username" name="username" type="text"
+                 autocomplete="username" autofocus required>
+        </div>
+        <div class="field">
+          <label for="password">{{ t('dash.login.password') }}</label>
+          <input class="input" id="password" name="password" type="password"
+                 autocomplete="current-password" required>
+        </div>
+        <button class="btn primary" type="submit" style="width:100%; justify-content:center;">
+          {{ t('dash.login.submit') }}
+        </button>
+      </form>
+    </div>
+  </div>
+</body>
+</html>

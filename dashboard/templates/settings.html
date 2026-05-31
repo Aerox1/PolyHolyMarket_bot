@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% set active_nav = 'settings' %}
+{% block title %}{{ t('dash.nav.settings') }}{% endblock %}
+
+{% block content %}
+  <div class="page-head">
+    <h1 class="page-title">{{ t('dash.nav.settings') }}</h1>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h2>{{ t('dash.settings.admin') }}</h2></div>
+    <div class="card-body">
+      <dl class="dl">
+        <dt>{{ t('dash.login.username') }}</dt>
+        <dd><bdi class="mono ltr">{{ admin.username }}</bdi></dd>
+        <dt>{{ t('dash.settings.role') }}</dt>
+        <dd>
+          {% if admin.is_superadmin %}
+            <span class="status-pill active">{{ t('dash.settings.superadmin') }}</span>
+          {% else %}
+            <span class="status-pill muted">{{ t('dash.settings.admin_role') }}</span>
+          {% endif %}
+        </dd>
+        <dt>{{ t('dash.settings.last_login') }}</dt>
+        <dd>
+          {% if admin.last_login_at %}
+            <bdi class="mono ltr">{{ admin.last_login_at.strftime('%Y-%m-%d %H:%M') if admin.last_login_at.strftime is defined else admin.last_login_at }}</bdi>
+          {% else %}<span class="muted">{{ t('dash.common.never') }}</span>{% endif %}
+        </dd>
+      </dl>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h2>{{ t('dash.settings.language') }}</h2></div>
+    <div class="card-body">
+      <form class="lang-switch" method="POST" action="/me/language">
+        {% for code in supported_langs %}
+        <button type="submit" name="lang" value="{{ code }}"
+                class="{% if code == lang %}active{% endif %}">{{ code | upper }}</button>
+        {% endfor %}
+      </form>
+    </div>
+  </div>
+
+  <div class="notice warn">{{ t('dash.settings.keys_note') }}</div>
+{% endblock %}

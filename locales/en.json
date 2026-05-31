@@ -144,7 +144,10 @@
       "loading": "Loading…",
       "yes": "Yes",
       "no": "No",
-      "actions": "Actions"
+      "actions": "Actions",
+      "next": "Next",
+      "page": "Page",
+      "prev": "Previous"
     },
     "login": {
       "title": "Admin sign in",
@@ -182,7 +185,32 @@
       "activate": "Activate",
       "status_active": "Active",
       "status_suspended": "Suspended",
-      "status_banned": "Banned"
+      "status_banned": "Banned",
+      "avg_price": "Avg price",
+      "back_to_list": "Back to users",
+      "change_status": "Change status",
+      "confirm_status": "Change this user's status?",
+      "created": "Created",
+      "executed": "Executed",
+      "filter_all": "All statuses",
+      "first_name": "First name",
+      "label": "Label",
+      "last_synced": "Last synced",
+      "market": "Market",
+      "no_accounts": "No connected accounts.",
+      "no_orders": "No orders.",
+      "no_positions": "No open positions.",
+      "no_trades": "No trades.",
+      "none": "No users found.",
+      "outcome": "Outcome",
+      "price": "Price",
+      "profile": "Profile",
+      "search_placeholder": "Search by username or Telegram ID",
+      "side": "Side",
+      "size": "Size",
+      "status_": "Status ",
+      "token": "Token",
+      "value": "Value"
     },
     "metrics": {
       "title": "Overview",
@@ -190,7 +218,10 @@
       "active_users": "Active users",
       "aum": "Assets under management",
       "trades_today": "Trades today",
-      "new_users_today": "New users today"
+      "new_users_today": "New users today",
+      "banned_users": "Banned users",
+      "suspended_users": "Suspended users",
+      "total_accounts": "Connected accounts"
     },
     "broadcast": {
       "title": "Broadcast message",
@@ -199,7 +230,10 @@
       "target_active": "Active users only",
       "by_language": "By language",
       "send": "Send broadcast",
-      "sent": "Broadcast queued for {count} user(s)."
+      "sent": "Broadcast queued for {count} user(s).",
+      "all_languages": "All languages",
+      "confirm": "Send this broadcast to the selected users?",
+      "worker_note": "Queued broadcasts are delivered to users by the bot worker process."
     },
     "audit": {
       "title": "Audit log",
@@ -207,7 +241,17 @@
       "actor": "Actor",
       "event": "Event",
       "user": "User",
-      "detail": "Detail"
+      "detail": "Detail",
+      "none": "No audit entries."
+    },
+    "settings": {
+      "admin": "Administrator",
+      "admin_role": "Admin",
+      "keys_note": "Wallet private keys and API secrets are encrypted and never shown in this dashboard.",
+      "language": "Language",
+      "last_login": "Last login",
+      "role": "Role",
+      "superadmin": "Superadmin"
     }
   }
 }

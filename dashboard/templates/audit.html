@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% from "_macros.html" import dt with context %}
+{% set active_nav = 'audit' %}
+{% block title %}{{ t('dash.audit.title') }}{% endblock %}
+
+{% block content %}
+  <div class="page-head">
+    <h1 class="page-title">{{ t('dash.audit.title') }}</h1>
+  </div>
+
+  <form class="toolbar" method="GET" action="/audit">
+    <input class="input mono" type="text" name="event" value="{{ event_filter or '' }}"
+           placeholder="{{ t('dash.audit.event') }}">
+    <button class="btn primary" type="submit">{{ t('dash.common.search') }}</button>
+  </form>
+
+  <div class="card">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>{{ t('dash.audit.time') }}</th>
+            <th>{{ t('dash.audit.actor') }}</th>
+            <th>{{ t('dash.audit.event') }}</th>
+            <th>{{ t('dash.audit.user') }}</th>
+            <th>{{ t('dash.audit.detail') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for e in entries %}
+          <tr>
+            <td>{{ dt(e.ts) }}</td>
+            <td>
+              <span class="pill muted">{{ e.actor_type or '—' }}</span>
+              {% if e.actor_id is not none %}<bdi class="mono ltr">#{{ e.actor_id }}</bdi>{% endif %}
+            </td>
+            <td><bdi class="mono ltr">{{ e.event }}</bdi></td>
+            <td>
+              {% if e.user_id is not none %}
+                <a href="/users/{{ e.user_id }}"><bdi class="mono ltr">#{{ e.user_id }}</bdi></a>
+              {% else %}—{% endif %}
+            </td>
+            <td>
+              {% if e.detail %}
+                <bdi class="mono ltr" dir="ltr">{{ e.detail | tojson if e.detail is mapping else e.detail }}</bdi>
+              {% else %}—{% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5"><div class="empty">{{ t('dash.audit.none') }}</div></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="pager">
+    {% set base = '/audit?event=' ~ (event_filter or '') %}
+    {% if page > 1 %}
+      <a class="btn sm" href="{{ base }}&page={{ page - 1 }}">{{ t('dash.common.prev') }}</a>
+    {% else %}
+      <span class="btn sm" aria-disabled="true" style="opacity:.4; pointer-events:none;">{{ t('dash.common.prev') }}</span>
+    {% endif %}
+    <span class="page-info">{{ t('dash.common.page') }} <bdi class="ltr">{{ page }}</bdi></span>
+    {% if has_next %}
+      <a class="btn sm" href="{{ base }}&page={{ page + 1 }}">{{ t('dash.common.next') }}</a>
+    {% else %}
+      <span class="btn sm" aria-disabled="true" style="opacity:.4; pointer-events:none;">{{ t('dash.common.next') }}</span>
+    {% endif %}
+  </div>
+{% endblock %}

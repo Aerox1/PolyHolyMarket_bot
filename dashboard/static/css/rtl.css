@@ -1,0 +1,42 @@
+/* ──────────────────────────────────────────────────────────────────────────
+   RTL overrides. Loaded after theme.css; only applies under [dir="rtl"].
+   Most layout already uses logical properties (margin-inline / text-align:
+   start / inset-inline), so this file only handles the few physical rules
+   left and ensures numbers/addresses are not visually reversed.
+   ────────────────────────────────────────────────────────────────────────── */
+
+[dir="rtl"] body { font-family: 'Vazirmatn', 'IRANSans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+
+/* Default text alignment flips to the right edge */
+[dir="rtl"] { text-align: right; }
+
+/* Tables: header/cell text starts at the right; numeric columns stay LTR */
+[dir="rtl"] thead th,
+[dir="rtl"] tbody td { text-align: right; }
+[dir="rtl"] td.right, [dir="rtl"] th.right { text-align: left; }
+
+/* Definition list: label column on the right */
+[dir="rtl"] .dl { direction: rtl; }
+
+/* Login + textarea input direction */
+[dir="rtl"] .input, [dir="rtl"] .select, [dir="rtl"] .textarea { text-align: right; }
+
+/* Toast already uses inset-inline-end (theme.css) — flips automatically.
+   Nav already uses margin-inline-start — flips automatically. */
+
+/* Numbers, wallet addresses, order ids, money: keep visual LTR even in RTL.
+   Markup wraps these in <bdi class="ltr"> or dir="ltr"; isolate them hard. */
+[dir="rtl"] bdi.ltr,
+[dir="rtl"] .mono,
+[dir="rtl"] .num {
+  direction: ltr;
+  unicode-bidi: isolate;
+  display: inline-block;
+}
+
+/* Metric values are numeric — never reverse */
+[dir="rtl"] .metric-value { direction: ltr; text-align: right; }
+
+/* Pager arrows: the layout uses space-between so it mirrors naturally;
+   keep page-info text aligned to start. */
+[dir="rtl"] .pager { direction: rtl; }
