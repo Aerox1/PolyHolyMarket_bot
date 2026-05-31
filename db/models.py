@@ -278,6 +278,64 @@ class Admin(Base):
     created_at: Mapped[datetime] = _now()
 
 
+# ── Mini App categories (Polymarket tags as swipeable cards) ─────────────────
+
+class Category(Base):
+    __tablename__ = "categories"
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    slug: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
+    title: Mapped[str] = mapped_column(String(128), nullable=False)
+    tag_id: Mapped[str | None] = mapped_column(String(64))        # Polymarket tag id
+    tag_slug: Mapped[str | None] = mapped_column(String(128))     # Polymarket tag slug
+    volume: Mapped[float] = mapped_column(Numeric(20, 2), default=0, nullable=False)  # cached, for sort
+    # image (Gemini) — image_path is a cached file under the webapp static dir
+    image_path: Mapped[str | None] = mapped_column(String(256))
+    image_status: Mapped[str] = mapped_column(String(12), default="none", nullable=False)  # none|generating|ready|failed
+    image_prompt: Mapped[str | None] = mapped_column(Text)
+    image_generated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # curation
+    pinned: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    hidden: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    display_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_at: Mapped[datetime] = _now()
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    __table_args__ = (Index("ix_categories_sort", "hidden", "pinned", "display_order"),)
+
+
+class GeminiUsage(Base):
+    """One row per Gemini image-generation attempt — the spend ledger the weekly
+    budget is computed from."""
+
+    __tablename__ = "gemini_usage"
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    ts: Mapped[datetime] = _now()
+    kind: Mapped[str] = mapped_column(String(16), default="image", nullable=False)
+    category_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("categories.id", ondelete="SET NULL"))
+    model: Mapped[str | None] = mapped_column(String(64))
+    cost_usd: Mapped[float] = mapped_column(Numeric(10, 4), default=0, nullable=False)
+    ok: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+    __table_args__ = (Index("ix_gemini_usage_ts", "ts"),)
+
+
+class AppConfig(Base):
+    """Runtime-editable key/value config (e.g. the live Gemini weekly budget),
+    so admins can change settings without a redeploy."""
+
+    __tablename__ = "app_config"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str] = mapped_column(Text, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
 # ── audit log (security events) ──────────────────────────────────────────────
 
 class AuditLog(Base):

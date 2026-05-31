@@ -24,6 +24,12 @@ dist/
 *.db
 pgdata/
 
+# ── Generated assets / frontend build ────────────────────
+data/cards/
+webapp/frontend/node_modules/
+webapp/frontend/dist/
+node_modules/
+
 # ── Logs / tmp ───────────────────────────────────────────
 logs/
 *.log

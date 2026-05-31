@@ -53,6 +53,25 @@ class Settings(BaseSettings):
     chain_id: int = Field(137, alias="CHAIN_ID")
     polymarket_signup_url: str = Field("https://polymarket.com", alias="POLYMARKET_SIGNUP_URL")
 
+    # ── Mini App (webapp) ─────────────────────────────────
+    webapp_host: str = Field("0.0.0.0", alias="WEBAPP_HOST")
+    webapp_port: int = Field(8888, alias="WEBAPP_PORT")
+    # Public HTTPS base URL of the Mini App (set as the Web App URL in BotFather).
+    webapp_base_url: str = Field("", alias="WEBAPP_BASE_URL")
+    # initData freshness window (seconds) — reject replays older than this.
+    initdata_max_age_seconds: int = Field(3600, alias="INITDATA_MAX_AGE_SECONDS")
+
+    # ── Gemini (category card images) ─────────────────────
+    gemini_api_key: str = Field("", alias="GEMINI_API_KEY")
+    gemini_image_model: str = Field("gemini-2.5-flash-image", alias="GEMINI_IMAGE_MODEL")
+    # Estimated USD cost per generated image — used for budget accounting.
+    gemini_image_cost_usd: float = Field(0.04, alias="GEMINI_IMAGE_COST_USD")
+    # Default weekly budget (USD). The live value is editable in the admin
+    # dashboard (stored in app_config); this is just the seed/fallback.
+    gemini_weekly_budget_usd: float = Field(10.0, alias="GEMINI_WEEKLY_BUDGET_USD")
+    # Directory where generated category card images are cached (served at /cards).
+    cards_dir: str = Field("data/cards", alias="CARDS_DIR")
+
     # ── Behaviour ─────────────────────────────────────────
     default_language: str = Field("en", alias="DEFAULT_LANGUAGE")
     log_level: str = Field("INFO", alias="LOG_LEVEL")
