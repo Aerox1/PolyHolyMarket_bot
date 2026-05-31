@@ -13,7 +13,9 @@ from datetime import datetime, timezone
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from db.models import Account, AuditLog, Order, Trade, User, UserStatus
+from core.config import settings
+from db.models import Account, AuditLog, Category, Order, Trade, User, UserStatus
+from db.repositories import appconfig, gemini_usage
 
 
 def _today_start() -> datetime:
@@ -213,3 +215,55 @@ def list_audit(db: Session, *, event: str | None = None, user_id: int | None = N
 
 def wallet_addresses_for_user(db: Session, user_id: int) -> list[str]:
     return list(db.scalars(select(Account.wallet_address).where(Account.user_id == user_id)))
+
+
+# ── Mini App: categories + Gemini budget ──────────────────────────────────────
+
+def list_categories(db: Session) -> list[Category]:
+    """All categories (incl. hidden) for the admin, in display order."""
+    return list(
+        db.scalars(
+            select(Category).order_by(
+                Category.pinned.desc(), Category.display_order.asc(), Category.volume.desc()
+            )
+        )
+    )
+
+
+def curate_category(db: Session, category_id: int, action: str) -> bool:
+    cat = db.get(Category, category_id)
+    if cat is None:
+        return False
+    if action == "pin":
+        cat.pinned = True
+    elif action == "unpin":
+        cat.pinned = False
+    elif action == "hide":
+        cat.hidden = True
+    elif action == "unhide":
+        cat.hidden = False
+    elif action == "regen":
+        # The key-less dashboard can't call Gemini; reset status so the webapp
+        # regenerates this image on its next refresh cycle.
+        cat.image_status = "none"
+        cat.image_path = None
+    else:
+        return False
+    return True
+
+
+def gemini_budget(db: Session) -> float:
+    return appconfig.get_float_sync(db, appconfig.GEMINI_WEEKLY_BUDGET, settings.gemini_weekly_budget_usd)
+
+
+def set_gemini_budget(db: Session, value: float) -> None:
+    appconfig.set_sync(db, appconfig.GEMINI_WEEKLY_BUDGET, f"{value:.2f}")
+
+
+def gemini_stats(db: Session) -> dict:
+    return {
+        "budget": gemini_budget(db),
+        "spent": gemini_usage.weekly_spend_sync(db),
+        "images_this_week": gemini_usage.image_count_window_sync(db),
+        "configured": bool(settings.gemini_api_key),
+    }

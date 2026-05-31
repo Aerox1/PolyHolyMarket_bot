@@ -162,7 +162,8 @@
       "broadcast": "Broadcast",
       "audit": "Audit log",
       "settings": "Settings",
-      "logout": "Sign out"
+      "logout": "Sign out",
+      "miniapp": "Mini App"
     },
     "users": {
       "title": "Users",
@@ -252,6 +253,27 @@
       "last_login": "Last login",
       "role": "Role",
       "superadmin": "Superadmin"
+    },
+    "miniapp": {
+      "title": "Mini App",
+      "gemini": "Gemini image budget",
+      "gemini_not_configured": "GEMINI_API_KEY is not configured — category cards use placeholder gradients until a working key is set.",
+      "weekly_budget": "Weekly budget",
+      "spent_7d": "Spent (7 days)",
+      "images_7d": "Images (7 days)",
+      "categories": "Categories",
+      "category": "Category",
+      "volume": "Volume",
+      "image": "Image",
+      "hidden": "Hidden",
+      "visible": "Visible",
+      "pin": "Pin",
+      "unpin": "Unpin",
+      "hide": "Hide",
+      "unhide": "Unhide",
+      "regen": "Regenerate image",
+      "no_categories": "No categories synced yet.",
+      "regen_note": "“Regenerate” clears the image so the Mini App service re-creates it on its next refresh (within the weekly budget)."
     }
   }
 }

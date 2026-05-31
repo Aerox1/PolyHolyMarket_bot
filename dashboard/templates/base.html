@@ -16,6 +16,7 @@
       <nav class="nav-tabs">
         <a class="nav-tab {% if active_nav == 'metrics' %}active{% endif %}" href="/metrics">{{ t('dash.nav.metrics') }}</a>
         <a class="nav-tab {% if active_nav == 'users' %}active{% endif %}" href="/users">{{ t('dash.nav.users') }}</a>
+        <a class="nav-tab {% if active_nav == 'miniapp' %}active{% endif %}" href="/miniapp">{{ t('dash.nav.miniapp') }}</a>
         <a class="nav-tab {% if active_nav == 'audit' %}active{% endif %}" href="/audit">{{ t('dash.nav.audit') }}</a>
         {% if admin and admin.is_superadmin %}
         <a class="nav-tab {% if active_nav == 'broadcast' %}active{% endif %}" href="/broadcast">{{ t('dash.nav.broadcast') }}</a>

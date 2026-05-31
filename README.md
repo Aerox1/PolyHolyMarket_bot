@@ -109,6 +109,21 @@ Foundation tests cover encryption round-trip/rotation, i18n fallback + RTL + no-
 | `/manage` | Positions with **[Sell 50%] [Close]** buttons |
 | `/close <token>` · `/cancel <id>` · `/cancelall` | Close position / cancel order(s) |
 
+## Mini App (gamified swipe UI)
+
+A Telegram **Mini App** (`webapp/` service + `webapp/frontend/` React app) turns the bot into a swipe game:
+
+- **Category cards** = top Polymarket tags by volume ("Sports", "Politics", "Iran"…), auto-synced + admin-curated (pin/hide). Each card's background is a **Gemini-generated image** (image only — title/volume/prices are overlaid as UI, never baked in), with a gradient fallback.
+- **Gestures:** swipe ↑/↓ = browse categories · ← = drill into a category's markets (sorted by volume) · → = open the bet panel. Telegram BackButton steps back out.
+- **Bet panel:** YES/NO with live prices + preset chips ($1/$5/$20/$100) → confirm → **real Polymarket market order** via the user's connected wallet (server re-fetches the market + resolves the token; amount-capped). Not connected → prompt to connect in the bot.
+- **Gemini budget:** hard rolling-7-day cap (default **$10/wk**), **editable in the admin dashboard → Mini App tab**, which also shows spend + lets you pin/hide/regenerate category images. Over budget → cards fall back to gradients.
+
+**Auth:** every Mini App API call is authenticated by validating Telegram `initData` (HMAC) — the client's telegram id is never trusted. The `webapp` service holds `ENCRYPTION_KEY` (it signs bets); the admin dashboard stays key-less.
+
+**Run it:** `uvicorn webapp.app:app --port 8888` (or the `webapp` compose service). Build the frontend with `cd webapp/frontend && npm install && npm run build` (Docker does this automatically). Then set the Mini App's HTTPS URL (`WEBAPP_BASE_URL`) as the Web App in **@BotFather → Bot Settings → Menu Button / Web App**.
+
+> ⚠️ The Gemini key you provided currently returns **HTTP 403** (API not enabled / key restricted). Create a fresh key at **aistudio.google.com/apikey** (billing on for image models) → set `GEMINI_API_KEY`. Until then, cards use gradient placeholders — everything else works.
+
 ## Status — all phases complete ✅
 
 - **Phase 0 — Foundations:** config, Fernet crypto + argon2, i18n (4 langs, RTL), DB schema, Alembic, Docker.

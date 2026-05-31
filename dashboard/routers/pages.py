@@ -265,6 +265,42 @@ def audit_log(
     )
 
 
+@router.get("/miniapp")
+def miniapp_page(request: Request, admin: Admin = Depends(require_admin), db: Session = Depends(get_db)):
+    return deps.render(request, "miniapp.html", admin=admin,
+                       categories=repo.list_categories(db), gemini=repo.gemini_stats(db))
+
+
+@router.post("/miniapp/budget")
+def miniapp_set_budget(
+    request: Request,
+    weekly_budget: float = Form(...),
+    admin: Admin = Depends(require_superadmin),
+    db: Session = Depends(get_db),
+    _csrf: None = Depends(verify_csrf),
+):
+    if weekly_budget < 0:
+        raise HTTPException(status_code=400, detail="budget must be >= 0")
+    repo.set_gemini_budget(db, weekly_budget)
+    audit.record(db, AuditEvent.GEMINI_BUDGET_SET, actor_type="admin", actor_id=admin.id,
+                 detail={"weekly_budget": weekly_budget}, ip=_client_ip(request))
+    return RedirectResponse("/miniapp", status_code=HTTP_303_SEE_OTHER)
+
+
+@router.post("/miniapp/categories/{category_id}")
+def miniapp_curate(
+    request: Request,
+    category_id: int,
+    action: str = Form(...),
+    admin: Admin = Depends(require_admin),
+    db: Session = Depends(get_db),
+    _csrf: None = Depends(verify_csrf),
+):
+    if not repo.curate_category(db, category_id, action):
+        raise HTTPException(status_code=400, detail="invalid action or category")
+    return RedirectResponse("/miniapp", status_code=HTTP_303_SEE_OTHER)
+
+
 @router.get("/settings")
 def settings_page(
     request: Request,

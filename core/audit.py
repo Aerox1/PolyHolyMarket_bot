@@ -41,6 +41,7 @@ class AuditEvent(str, enum.Enum):
     USER_BANNED = "USER_BANNED"
     USER_ACTIVATED = "USER_ACTIVATED"
     BROADCAST_SENT = "BROADCAST_SENT"
+    GEMINI_BUDGET_SET = "GEMINI_BUDGET_SET"
 
 
 def _row(

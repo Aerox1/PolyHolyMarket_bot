@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% set active_nav = 'miniapp' %}
+{% block title %}{{ t('dash.miniapp.title') }}{% endblock %}
+
+{% block content %}
+  <div class="page-head">
+    <h1 class="page-title">{{ t('dash.miniapp.title') }}</h1>
+  </div>
+
+  {# ── Gemini budget ─────────────────────────────────────────────────────── #}
+  <div class="card">
+    <div class="card-header"><h2>{{ t('dash.miniapp.gemini') }}</h2></div>
+    <div class="card-body">
+      {% if not gemini.configured %}
+        <div class="notice warn">{{ t('dash.miniapp.gemini_not_configured') }}</div>
+      {% endif %}
+      <div class="metrics">
+        <div class="metric">
+          <div class="metric-label">{{ t('dash.miniapp.weekly_budget') }}</div>
+          <div class="metric-value"><bdi class="ltr">${{ '%.2f'|format(gemini.budget) }}</bdi></div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">{{ t('dash.miniapp.spent_7d') }}</div>
+          <div class="metric-value"><bdi class="ltr">${{ '%.2f'|format(gemini.spent) }}</bdi></div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">{{ t('dash.miniapp.images_7d') }}</div>
+          <div class="metric-value"><bdi class="ltr">{{ gemini.images_this_week }}</bdi></div>
+        </div>
+      </div>
+      {% if admin.is_superadmin %}
+      <form method="POST" action="/miniapp/budget" style="display:flex; gap:8px; align-items:flex-end; margin-top:12px;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <div class="field" style="max-width:200px;">
+          <label for="weekly_budget">{{ t('dash.miniapp.weekly_budget') }} (USD)</label>
+          <input class="input" id="weekly_budget" name="weekly_budget" type="number" step="0.01" min="0"
+                 value="{{ '%.2f'|format(gemini.budget) }}">
+        </div>
+        <button class="btn primary" type="submit">{{ t('dash.common.save') }}</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ── Categories ────────────────────────────────────────────────────────── #}
+  <div class="card">
+    <div class="card-header"><h2>{{ t('dash.miniapp.categories') }}</h2></div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>{{ t('dash.miniapp.category') }}</th>
+            <th class="right">{{ t('dash.miniapp.volume') }}</th>
+            <th>{{ t('dash.miniapp.image') }}</th>
+            <th>{{ t('dash.users.status') }}</th>
+            <th>{{ t('dash.common.actions') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in categories %}
+          <tr>
+            <td>{{ c.title }} {% if c.pinned %}<span class="pill">📌</span>{% endif %}</td>
+            <td class="right"><bdi class="ltr">${{ '{:,.0f}'.format(c.volume|float) }}</bdi></td>
+            <td><span class="pill muted">{{ c.image_status }}</span></td>
+            <td>
+              {% if c.hidden %}<span class="status-pill muted">{{ t('dash.miniapp.hidden') }}</span>
+              {% else %}<span class="status-pill active">{{ t('dash.miniapp.visible') }}</span>{% endif %}
+            </td>
+            <td>
+              <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                {% set act = 'unpin' if c.pinned else 'pin' %}
+                <form method="POST" action="/miniapp/categories/{{ c.id }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                  <input type="hidden" name="action" value="{{ act }}">
+                  <button class="btn sm" type="submit">{{ t('dash.miniapp.unpin') if c.pinned else t('dash.miniapp.pin') }}</button>
+                </form>
+                {% set vis = 'unhide' if c.hidden else 'hide' %}
+                <form method="POST" action="/miniapp/categories/{{ c.id }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                  <input type="hidden" name="action" value="{{ vis }}">
+                  <button class="btn sm {{ 'success' if c.hidden else 'warn' }}" type="submit">{{ t('dash.miniapp.unhide') if c.hidden else t('dash.miniapp.hide') }}</button>
+                </form>
+                <form method="POST" action="/miniapp/categories/{{ c.id }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                  <input type="hidden" name="action" value="regen">
+                  <button class="btn sm" type="submit">{{ t('dash.miniapp.regen') }}</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5"><div class="empty">{{ t('dash.miniapp.no_categories') }}</div></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="card-body"><div class="notice">{{ t('dash.miniapp.regen_note') }}</div></div>
+  </div>
+{% endblock %}

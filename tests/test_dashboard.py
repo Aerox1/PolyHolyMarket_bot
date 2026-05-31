@@ -92,6 +92,13 @@ def test_login_rejected_without_csrf(client, seeded):
     assert r.status_code == 400
 
 
+def test_miniapp_admin_page(client, seeded):
+    _login(client, "s3cret!")
+    r = client.get("/miniapp")
+    assert r.status_code == 200
+    assert "Gemini" in r.text or "budget" in r.text.lower()
+
+
 def test_user_detail_never_leaks_key_material(client, seeded):
     _login(client, "s3cret!")
     r = client.get(f"/users/{seeded['user_id']}")
