@@ -21,6 +21,8 @@ async def get_or_create_user(
     first_name: str | None = None,
     default_language: str = "en",
 ) -> User:
+    # telegram_id is UNIQUE: a returning user always resolves to the same row,
+    # so repeated /start never creates duplicates.
     user = await session.scalar(select(User).where(User.telegram_id == telegram_id))
     if user is None:
         user = User(
@@ -31,8 +33,11 @@ async def get_or_create_user(
         )
         session.add(user)
         await session.flush()
-        session.add(UserSettings(user_id=user.id))
-        await session.flush()
+        # Idempotent: never double-insert settings (defensive against a user that
+        # somehow lacks them, or id reuse).
+        if await session.get(UserSettings, user.id) is None:
+            session.add(UserSettings(user_id=user.id))
+            await session.flush()
     else:
         # keep username/first_name fresh
         if username and user.username != username:

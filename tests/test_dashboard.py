@@ -29,9 +29,9 @@ def _login(client, password: str):
     return client.post("/login", data={"username": "dashadmin", "password": password, "csrf_token": token})
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def seeded():
-    """Create (once) an admin + a user with an encrypted account."""
+    """Create an admin + a user with an encrypted account (per test)."""
     from sqlalchemy import select
 
     with SessionLocal() as s:

@@ -20,6 +20,9 @@ os.environ.setdefault("SESSION_SECRET", "test-session-secret")
 os.environ["WEBAPP_DEV_AUTH"] = "false"
 os.environ["GEMINI_API_KEY"] = ""
 os.environ["TELEGRAM_BOT_TOKEN"] = "test-token"
+# Disable SQLite WAL in tests: WAL gives the sync + async engines divergent read
+# snapshots of the same file, which broke cross-engine test isolation.
+os.environ["SQLITE_WAL"] = "0"
 
 import pytest  # noqa: E402
 
@@ -33,6 +36,25 @@ def _schema():
     create_all()
     yield
     Base.metadata.drop_all(engine)
+
+
+@pytest.fixture(autouse=True)
+def _clean_db(_schema):
+    """Give every test a pristine DB.
+
+    The bot/webapp use a SEPARATE async engine on the same sqlite file, so a plain
+    DELETE under WAL isn't reliably visible across engines (it left orphaned rows
+    + reused ids). Dropping+recreating the schema resets rowids and leaves no
+    orphans; disposing both pools forces fresh connections to the clean state."""
+    import db.engine as dbe
+    if dbe._async_engine is not None:
+        dbe._async_engine.sync_engine.dispose()
+    Base.metadata.drop_all(engine)
+    Base.metadata.create_all(engine)
+    yield
+    if dbe._async_engine is not None:
+        dbe._async_engine.sync_engine.dispose()
+    engine.dispose()
 
 
 @pytest.fixture

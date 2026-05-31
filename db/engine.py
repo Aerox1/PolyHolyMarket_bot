@@ -21,9 +21,15 @@ from db.models import Base
 
 def _sqlite_pragmas(dbapi_conn, _record) -> None:
     """WAL + busy_timeout so multiple processes (bot/webapp/dashboard) can share
-    a single SQLite file in local dev without 'database is locked' errors."""
+    a single SQLite file in local dev without 'database is locked' errors.
+
+    WAL can be disabled (``SQLITE_WAL=0``) — the test suite does this because WAL
+    gives the sync + async engines divergent read snapshots of the same file."""
+    import os
+
     cur = dbapi_conn.cursor()
-    cur.execute("PRAGMA journal_mode=WAL")
+    if os.environ.get("SQLITE_WAL", "1") != "0":
+        cur.execute("PRAGMA journal_mode=WAL")
     cur.execute("PRAGMA busy_timeout=5000")
     cur.execute("PRAGMA synchronous=NORMAL")
     cur.close()
