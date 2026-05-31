@@ -54,24 +54,39 @@ def build_prompt(title: str) -> str:
     )
 
 
-def _call_gemini_image(prompt: str) -> tuple[bytes, str]:
-    """Sync Gemini image call. Returns (image_bytes, mime). Raises on failure."""
+def _call_gemini_image(prompt: str, attempts: int = 3) -> tuple[bytes, str]:
+    """Sync Gemini image call. Returns (image_bytes, mime). Raises on failure.
+
+    Image responses are large (~1-2 MB base64); ``Connection: close`` avoids
+    keep-alive issues through some proxies, and we retry transient transport
+    errors (RemoteProtocolError etc.).
+    """
     url = f"{_API_BASE}/models/{settings.gemini_image_model}:generateContent"
+    headers = {"x-goog-api-key": settings.gemini_api_key, "Connection": "close"}
     body = {
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {"responseModalities": ["IMAGE"]},
     }
-    with httpx.Client(timeout=60) as client:
-        r = client.post(url, headers={"x-goog-api-key": settings.gemini_api_key}, json=body)
-        r.raise_for_status()
-        data = r.json()
-    for cand in data.get("candidates", []):
-        for part in cand.get("content", {}).get("parts", []):
-            inline = part.get("inlineData") or part.get("inline_data")
-            if inline and inline.get("data"):
-                mime = inline.get("mimeType") or inline.get("mime_type") or "image/png"
-                return base64.b64decode(inline["data"]), mime
-    raise ValueError("no image in Gemini response")
+    last_exc: Exception | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            with httpx.Client(timeout=90) as client:
+                r = client.post(url, headers=headers, json=body)
+                r.raise_for_status()
+                data = r.json()
+            for cand in data.get("candidates", []):
+                for part in cand.get("content", {}).get("parts", []):
+                    inline = part.get("inlineData") or part.get("inline_data")
+                    if inline and inline.get("data"):
+                        mime = inline.get("mimeType") or inline.get("mime_type") or "image/png"
+                        return base64.b64decode(inline["data"]), mime
+            raise ValueError("no image in Gemini response")
+        except httpx.TransportError as exc:  # transient — retry
+            last_exc = exc
+            logger.info("Gemini image transport error (attempt %d/%d): %s",
+                        attempt, attempts, type(exc).__name__)
+            continue
+    raise last_exc if last_exc else RuntimeError("gemini image call failed")
 
 
 def _save(slug: str, img: bytes, mime: str) -> str:

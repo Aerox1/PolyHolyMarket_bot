@@ -122,7 +122,7 @@ A Telegram **Mini App** (`webapp/` service + `webapp/frontend/` React app) turns
 
 **Run it:** `uvicorn webapp.app:app --port 8888` (or the `webapp` compose service). Build the frontend with `cd webapp/frontend && npm install && npm run build` (Docker does this automatically). Then set the Mini App's HTTPS URL (`WEBAPP_BASE_URL`) as the Web App in **@BotFather → Bot Settings → Menu Button / Web App**.
 
-> ⚠️ The Gemini key you provided currently returns **HTTP 403** (API not enabled / key restricted). Create a fresh key at **aistudio.google.com/apikey** (billing on for image models) → set `GEMINI_API_KEY`. Until then, cards use gradient placeholders — everything else works.
+> ✅ Gemini image generation is **verified working** end-to-end (generates a 1024×1024 text-free card, caches it at `/cards`, charges the budget). Set `GEMINI_API_KEY` in `.env`; the webapp generates category images on startup within the weekly budget. (If the bot runs behind an outbound proxy that blocks `generativelanguage.googleapis.com`, set `NO_PROXY` to include that host; the client also sends `Connection: close` + retries transient transport errors.)
 
 ## Status — all phases complete ✅
 
