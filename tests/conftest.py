@@ -15,6 +15,11 @@ os.environ.setdefault("ENCRYPTION_KEY", Fernet.generate_key().decode())
 os.environ["DATABASE_URL"] = f"sqlite:///{_TMPDIR}/test.db"
 os.environ.setdefault("TELEGRAM_BOT_TOKEN", "test-token")
 os.environ.setdefault("SESSION_SECRET", "test-session-secret")
+# Isolate the suite from a developer's local .env (which may enable dev-auth or
+# carry a real bot token / gemini key). Force the test-relevant flags here.
+os.environ["WEBAPP_DEV_AUTH"] = "false"
+os.environ["GEMINI_API_KEY"] = ""
+os.environ["TELEGRAM_BOT_TOKEN"] = "test-token"
 
 import pytest  # noqa: E402
 
