@@ -7,8 +7,16 @@ def test_basic_lookup_and_interpolation():
 
 
 def test_fallback_to_english_for_untranslated_key():
-    # 'bot.confirm.yes' exists only in en.json so far.
-    assert i18n.t("bot.confirm.yes", "ru") == i18n.t("bot.confirm.yes", "en")
+    # All locales are now fully translated, so simulate a missing key in 'ru'
+    # by temporarily removing one and confirming it falls back to English.
+    i18n._load()
+    en_val = i18n.t("bot.confirm.yes", "en")
+    ru_confirm = i18n._CATALOGS["ru"]["bot"]["confirm"]
+    saved = ru_confirm.pop("yes")
+    try:
+        assert i18n.t("bot.confirm.yes", "ru") == en_val
+    finally:
+        ru_confirm["yes"] = saved
 
 
 def test_missing_key_returns_key_string():

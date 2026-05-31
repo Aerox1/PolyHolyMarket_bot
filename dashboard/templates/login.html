@@ -19,6 +19,7 @@
       {% endif %}
 
       <form method="POST" action="/login">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <div class="field">
           <label for="username">{{ t('dash.login.username') }}</label>
           <input class="input mono" id="username" name="username" type="text"

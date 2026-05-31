@@ -35,6 +35,7 @@
         <form method="POST" action="/users/{{ u.id }}/status"
               data-confirm="{{ t('dash.users.confirm_status') }}"
               style="display:flex; gap:8px; flex-wrap:wrap;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
           <button class="btn success" type="submit" name="status" value="active"
                   {% if u.status == 'active' %}disabled{% endif %}>{{ t('dash.users.activate') }}</button>
           <button class="btn warn" type="submit" name="status" value="suspended"

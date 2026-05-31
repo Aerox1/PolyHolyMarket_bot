@@ -25,7 +25,7 @@ from core.audit import AuditEvent
 from core.crypto import verify_password
 from core.i18n import SUPPORTED, t
 from dashboard import deps
-from dashboard.deps import current_admin, get_db, require_admin
+from dashboard.deps import current_admin, get_db, require_admin, verify_csrf
 from db.models import Admin
 
 router = APIRouter()
@@ -58,6 +58,7 @@ def login_submit(
     username: str = Form(...),
     password: str = Form(...),
     db: Session = Depends(get_db),
+    _csrf: None = Depends(verify_csrf),
 ):
     admin = db.execute(
         select(Admin).where(Admin.username == username)
@@ -127,6 +128,7 @@ def set_language(
     request: Request,
     lang: str = Form(...),
     admin: Admin = Depends(require_admin),
+    _csrf: None = Depends(verify_csrf),
 ):
     if lang in SUPPORTED:
         request.session["dash_lang"] = lang

@@ -15,6 +15,7 @@
     <div class="card-body">
       <form method="POST" action="/broadcast"
             data-confirm="{{ t('dash.broadcast.confirm') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <div class="field">
           <label for="message">{{ t('dash.broadcast.message') }}</label>
           <textarea class="textarea" id="message" name="message" required

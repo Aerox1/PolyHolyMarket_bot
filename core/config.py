@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     dashboard_host: str = Field("0.0.0.0", alias="DASHBOARD_HOST")
     dashboard_port: int = Field(8877, alias="DASHBOARD_PORT")
     session_secret: str = Field("", alias="SESSION_SECRET")
+    dashboard_cookie_secure: bool = Field(False, alias="DASHBOARD_COOKIE_SECURE")
     admin_bootstrap_user: str = Field("admin", alias="ADMIN_BOOTSTRAP_USER")
     admin_bootstrap_password_hash: str = Field("", alias="ADMIN_BOOTSTRAP_PASSWORD_HASH")
 

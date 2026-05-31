@@ -19,8 +19,11 @@ from core.i18n import t
 from db.engine import async_session_scope
 from db.models import UserStatus
 from db.repositories import users as users_repo
+from bot.ratelimit import RateLimiter
 
 logger = logging.getLogger(__name__)
+
+_rate_limiter = RateLimiter(max_events=25, window_seconds=10.0)
 
 
 async def preprocess(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -31,6 +34,13 @@ async def preprocess(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     # Optional allowlist (private beta). Empty = open to everyone.
     allowed = settings.allowed_user_ids
     if allowed and tg.id not in allowed:
+        raise ApplicationHandlerStop
+
+    # Per-user rate limit (abuse / flood protection).
+    if not _rate_limiter.allow(tg.id):
+        if update.effective_message is not None:
+            lang = context.user_data.get("lang", settings.default_language)
+            await update.effective_message.reply_text(t("bot.error.rate_limited", lang))
         raise ApplicationHandlerStop
 
     async with async_session_scope() as session:

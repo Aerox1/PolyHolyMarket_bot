@@ -23,7 +23,7 @@ from starlette.status import HTTP_303_SEE_OTHER
 from core import audit
 from core.audit import AuditEvent
 from dashboard import deps, repo
-from dashboard.deps import get_db, require_admin, require_superadmin
+from dashboard.deps import get_db, require_admin, require_superadmin, verify_csrf
 from db.models import Admin, Command, User, UserStatus
 from polymarket.client import Polymarket
 from polymarket.credentials import PolymarketCreds
@@ -180,6 +180,7 @@ def user_set_status(
     status: str = Form(...),
     admin: Admin = Depends(require_admin),
     db: Session = Depends(get_db),
+    _csrf: None = Depends(verify_csrf),
 ):
     if status not in _STATUS_EVENT:
         raise HTTPException(status_code=400, detail="Invalid status")
@@ -211,6 +212,7 @@ def broadcast_send(
     only_active: bool = Form(False),
     admin: Admin = Depends(require_superadmin),
     db: Session = Depends(get_db),
+    _csrf: None = Depends(verify_csrf),
 ):
     stmt = select(User)
     if only_active:

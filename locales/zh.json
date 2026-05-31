@@ -1,12 +1,15 @@
 {
-  "_meta": { "name": "中文", "dir": "ltr" },
+  "_meta": {
+    "name": "中文",
+    "dir": "ltr"
+  },
   "bot": {
     "start": {
       "welcome": "👋 欢迎使用 Polymarket 交易机器人，{name}！\n\n直接在 Telegram 中交易和管理您的 Polymarket 持仓。",
       "choose_language": "🌐 请选择您的语言：",
       "language_set": "✅ 语言已切换为中文。",
       "menu_prompt": "您想做什么？",
-      "help_text": "ℹ️ *帮助*\n\n*开始使用*\n/start — 打开主菜单\n/connect — 连接 Polymarket 钱包\n/disconnect — 移除已连接的钱包\n\n*账户与市场*\n/portfolio — 投资组合概览\n/positions — 持仓\n/balance — USDC 余额\n/orders — 未成交订单\n/trades — 近期成交\n/activity — 近期动态\n/search <关键词> — 搜索市场\n/market <condition_id> — 市场详情\n/price <token_id> — 当前价格\n/book <token_id> — 订单簿\n\n您的钱包凭据已加密，绝不会被分享。使用 /cancel 可中止任何步骤。"
+      "help_text": "ℹ️ *帮助*\n\n*开始使用*\n/start — 打开主菜单\n/connect — 连接 Polymarket 钱包\n/disconnect — 移除已连接的钱包\n\n*账户与市场*\n/portfolio — 投资组合概览\n/positions — 持仓\n/balance — USDC 余额\n/orders — 未成交订单\n/trades — 近期成交\n/activity — 近期动态\n/search <query> — 搜索市场\n/market <condition_id> — 市场详情\n/price <token_id> — 当前价格\n/book <token_id> — 订单簿\n\n您的钱包凭据已加密，绝不会被分享。使用 /cancel 可中止任何步骤。"
     },
     "menu": {
       "connect": "🔗 连接账户",
@@ -16,14 +19,239 @@
       "settings": "⚙️ 设置",
       "help": "ℹ️ 帮助"
     },
+    "create": {
+      "instructions": "🆕 *创建 Polymarket 账户*\n\n本机器人不会为您创建钱包。开始步骤如下：\n\n1. 打开 Polymarket 并注册。\n2. 在 Polygon 上用 USDC 为账户充值。\n3. 返回此处并点击 *连接账户* 进行关联。\n\n👉 {url}",
+      "back_to_connect": "准备好后，请点击 *连接账户*。"
+    },
     "connect": {
+      "choose_wallet_type": "🔗 *连接您的 Polymarket 钱包*\n\n您使用的是哪种钱包？",
+      "type_eoa": "MetaMask / 硬件钱包（EOA）",
+      "type_proxy": "邮箱 / Magic（Proxy）",
+      "type_safe": "Gnosis Safe",
+      "enter_address": "请发送您的 *公开钱包地址*（以 0x… 开头）。",
+      "bad_address": "⚠️ 这看起来不是有效的 0x 地址。请重试。",
+      "enter_funder": "请发送您的 *资金地址*（持有 USDC 的 proxy/Safe 地址）。",
       "enter_private_key": "🔐 现在请发送您的*私钥*。\n\n⚠️ 我会*立即删除*您的消息，以免留在聊天记录中。请勿向任何人透露此私钥。私钥在存储前会被加密。",
-      "success": "✅ *已连接！*\n\n钱包：`{wallet}`\nUSDC 余额：${balance}\n\n您现在可以查看持仓并进行交易。"
+      "key_deleted": "🔒 已收到私钥，您的消息已被删除。",
+      "key_delete_failed": "⚠️ 我无法删除您的消息——请*立即自行删除*。",
+      "bad_key": "⚠️ 这看起来不是有效的私钥。请重新发送（64 个十六进制字符）。",
+      "validating": "⏳ 正在验证您的钱包并派生 API 凭据…",
+      "mismatch": "❌ 此私钥并不控制您提供的钱包地址。请核对后重试。",
+      "validation_failed": "❌ 无法验证钱包。请核对您的私钥后重试。",
+      "success": "✅ *已连接！*\n\n钱包：`{wallet}`\nUSDC 余额：${balance}\n\n您现在可以查看持仓并进行交易。",
+      "cancelled": "连接已取消，未保存任何内容。",
+      "timeout": "⌛ 连接超时。未保存任何内容——请使用 /connect 重新开始。",
+      "default_label": "主账户"
+    },
+    "disconnect": {
+      "confirm": "断开钱包 `{wallet}` 的连接？您存储的私钥将被永久删除。",
+      "done": "✅ 已断开连接。您存储的凭据已被删除。",
+      "none": "您没有可断开连接的已连接账户。",
+      "button": "{label} — {wallet}",
+      "choose": "您想断开哪个钱包的连接？"
+    },
+    "account": {
+      "none": "您尚未连接账户。请点击 *连接账户* 或使用 /connect。",
+      "list_header": "*您的账户：*",
+      "switched": "✅ 当前账户已切换为 *{label}*。",
+      "current": "使用中"
+    },
+    "inquiry": {
+      "positions_header": "📈 *您的持仓：*",
+      "no_positions": "您没有未平仓的持仓。",
+      "balance": "💰 *USDC 余额：* ${balance}",
+      "portfolio": "📊 *投资组合*\n\n现金：${cash}\n持仓价值：${positions_value}\n总计：${total}\n盈亏：{pnl}（{pnl_pct}%）",
+      "orders_header": "📋 *未成交订单：*",
+      "no_orders": "您没有未成交订单。",
+      "trades_header": "🧾 *近期成交：*",
+      "no_trades": "暂无成交。",
+      "activity_header": "🕑 *近期动态：*",
+      "position_value": "价值",
+      "no_activity": "暂无近期动态。"
+    },
+    "market": {
+      "search_usage": "用法：/search <query>",
+      "searching": "🔎 正在搜索市场…",
+      "no_results": "未找到与“{query}”相关的市场。",
+      "results_header": "🔎 *匹配“{query}”的市场：*",
+      "price": "💵 {outcome}：${price}",
+      "market_usage": "用法：/market <condition_id>",
+      "price_usage": "用法：/price <token_id>",
+      "book_usage": "用法：/book <token_id>",
+      "detail": "📈 *{question}*\n\n结果：{outcomes}\n价格：{prices}\n交易量：${volume}\n流动性：${liquidity}\n截止：{end_date}\n代币：`{tokens}`",
+      "price_detail": "💲 *价格* `{token}`\n\n最优买价：${bid}\n最优卖价：${ask}\n中间价：${mid}\n价差：{spread}",
+      "book_header": "📗 *订单簿* `{token}`",
+      "book_asks": "*卖单（卖出）：*",
+      "book_bids": "*买单（买入）：*",
+      "no_book": "`{token}` 暂无可用的订单簿。"
+    },
+    "trade": {
+      "buy_usage": "用法：/buy <token_id> <price> <size>",
+      "sell_usage": "用法：/sell <token_id> <price> <size>",
+      "marketbuy_usage": "用法：/marketbuy <token_id> <amount_usd>",
+      "marketsell_usage": "用法：/marketsell <token_id> <amount_usd>",
+      "cancel_usage": "用法：/cancel <order_id>",
+      "close_usage": "用法：/close <token_id>",
+      "bad_number": "⚠️ 请提供有效的数字。",
+      "placing": "⏳ 正在提交您的订单…",
+      "sell_pct": "卖出 {pct}%",
+      "close_full": "平仓"
+    },
+    "confirm": {
+      "buy": "确认 *买入* {size} 份 `{token}`，价格 ${price}？",
+      "sell": "确认 *卖出* {size} 份 `{token}`，价格 ${price}？",
+      "marketbuy": "确认 *市价买入* ${amount} 的 `{token}`？",
+      "marketsell": "确认 *市价卖出* ${amount} 的 `{token}`？",
+      "close": "确认 *平掉* 您在 `{token}` 的全部持仓？",
+      "cancel_all": "⚠️ 确认 *取消全部* 未成交订单？此操作无法撤销。",
+      "yes": "✅ 确认",
+      "no": "❌ 取消",
+      "expired": "⌛ 此确认已过期。请重新执行该命令。",
+      "aborted": "已取消——未提交任何订单。",
+      "cancel": "取消订单 `{order_id}`？"
+    },
+    "order": {
+      "placed": "✅ 订单已提交。\nID：`{order_id}`\n状态：{status}",
+      "failed": "❌ 订单失败。请重试或调整您的参数。",
+      "cancelled": "✅ 订单 `{order_id}` 已取消。",
+      "cancelled_all": "✅ 已取消 {count} 笔未成交订单。",
+      "closed": "✅ `{token}` 的持仓已平仓。"
+    },
+    "settings": {
+      "header": "⚙️ *设置*",
+      "language_prompt": "🌐 请选择您的语言：",
+      "notifications_on": "🔔 通知已开启。",
+      "notifications_off": "🔕 通知已关闭。",
+      "confirm_on": "逐笔交易确认已开启。",
+      "confirm_off": "逐笔交易确认已关闭。"
     },
     "error": {
-      "no_account": "⚠️ 请先连接 Polymarket 账户（ /connect ）。",
+      "no_account": "⚠️ 请先连接 Polymarket 账户（ /connect ）才能执行此操作。",
+      "trading_unavailable": "⚠️ 此账户无法交易。请使用有效的私钥重新连接。",
       "suspended": "🚫 您的访问已被暂停，请联系客服。",
-      "banned": "🚫 您的访问权限已被撤销。"
+      "banned": "🚫 您的访问权限已被撤销。",
+      "rate_limited": "⏳ 请求过于频繁——请放慢速度。",
+      "generic": "⚠️ 出了点问题，请重试。"
+    }
+  },
+  "dash": {
+    "common": {
+      "never": "从不",
+      "save": "保存",
+      "cancel": "取消",
+      "confirm": "确认",
+      "search": "搜索",
+      "loading": "加载中…",
+      "yes": "是",
+      "no": "否",
+      "actions": "操作",
+      "next": "下一页",
+      "page": "页",
+      "prev": "上一页"
+    },
+    "login": {
+      "title": "管理员登录",
+      "username": "用户名",
+      "password": "密码",
+      "submit": "登录",
+      "failed": "用户名或密码无效。"
+    },
+    "nav": {
+      "metrics": "指标",
+      "users": "用户",
+      "broadcast": "广播",
+      "audit": "审计日志",
+      "settings": "设置",
+      "logout": "退出登录"
+    },
+    "users": {
+      "title": "用户",
+      "telegram_id": "Telegram ID",
+      "username": "用户名",
+      "language": "语言",
+      "status": "状态",
+      "accounts": "账户",
+      "aum": "管理资产",
+      "last_seen": "最近活跃",
+      "detail_title": "用户详情",
+      "wallet": "钱包",
+      "mode": "模式",
+      "positions": "持仓",
+      "orders": "订单",
+      "trades": "成交",
+      "pnl": "盈亏",
+      "suspend": "暂停",
+      "ban": "封禁",
+      "activate": "启用",
+      "status_active": "活跃",
+      "status_suspended": "已暂停",
+      "status_banned": "已封禁",
+      "avg_price": "平均价格",
+      "back_to_list": "返回用户列表",
+      "change_status": "更改状态",
+      "confirm_status": "更改此用户的状态？",
+      "created": "创建时间",
+      "executed": "成交时间",
+      "filter_all": "全部状态",
+      "first_name": "名字",
+      "label": "标签",
+      "last_synced": "最近同步",
+      "market": "市场",
+      "no_accounts": "没有已连接的账户。",
+      "no_orders": "没有订单。",
+      "no_positions": "没有未平仓的持仓。",
+      "no_trades": "没有成交。",
+      "none": "未找到用户。",
+      "outcome": "结果",
+      "price": "价格",
+      "profile": "资料",
+      "search_placeholder": "按用户名或 Telegram ID 搜索",
+      "side": "方向",
+      "size": "数量",
+      "status_": "状态 ",
+      "token": "代币",
+      "value": "价值"
+    },
+    "metrics": {
+      "title": "概览",
+      "total_users": "用户总数",
+      "active_users": "活跃用户",
+      "aum": "管理资产规模",
+      "trades_today": "今日成交",
+      "new_users_today": "今日新增用户",
+      "banned_users": "已封禁用户",
+      "suspended_users": "已暂停用户",
+      "total_accounts": "已连接账户"
+    },
+    "broadcast": {
+      "title": "广播消息",
+      "message": "消息",
+      "target_all": "全部用户",
+      "target_active": "仅活跃用户",
+      "by_language": "按语言",
+      "send": "发送广播",
+      "sent": "广播已加入队列，发送给 {count} 名用户。",
+      "all_languages": "全部语言",
+      "confirm": "向所选用户发送此广播？",
+      "worker_note": "排队的广播由机器人工作进程投递给用户。"
+    },
+    "audit": {
+      "title": "审计日志",
+      "time": "时间",
+      "actor": "操作者",
+      "event": "事件",
+      "user": "用户",
+      "detail": "详情",
+      "none": "没有审计记录。"
+    },
+    "settings": {
+      "admin": "管理员",
+      "admin_role": "管理员",
+      "keys_note": "钱包私钥和 API 密钥均已加密，绝不会在此仪表板中显示。",
+      "language": "语言",
+      "last_login": "上次登录",
+      "role": "角色",
+      "superadmin": "超级管理员"
     }
   }
 }

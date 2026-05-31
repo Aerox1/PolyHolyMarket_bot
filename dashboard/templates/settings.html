@@ -35,6 +35,7 @@
     <div class="card-header"><h2>{{ t('dash.settings.language') }}</h2></div>
     <div class="card-body">
       <form class="lang-switch" method="POST" action="/me/language">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         {% for code in supported_langs %}
         <button type="submit" name="lang" value="{{ code }}"
                 class="{% if code == lang %}active{% endif %}">{{ code | upper }}</button>

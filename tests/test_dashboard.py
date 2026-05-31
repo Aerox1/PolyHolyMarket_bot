@@ -4,6 +4,8 @@ Verifies the auth gate, the login flow, and — most importantly — that NO
 endpoint leaks wallet key material (plaintext or ciphertext).
 """
 
+import re
+
 import pytest
 from starlette.testclient import TestClient
 
@@ -12,6 +14,19 @@ from db.engine import SessionLocal
 from db.models import Account, Admin, User
 
 PLAINTEXT_KEY = "0x" + "f" * 64
+
+
+def _csrf(client) -> str:
+    """GET /login (sets the session cookie) and extract the CSRF token."""
+    html = client.get("/login").text
+    m = re.search(r'name="csrf_token"\s+value="([^"]+)"', html)
+    assert m, "no csrf token in login form"
+    return m.group(1)
+
+
+def _login(client, password: str):
+    token = _csrf(client)
+    return client.post("/login", data={"username": "dashadmin", "password": password, "csrf_token": token})
 
 
 @pytest.fixture(scope="session")
@@ -57,10 +72,10 @@ def test_login_page_renders(client):
 
 
 def test_login_flow_and_metrics(client, seeded):
-    bad = client.post("/login", data={"username": "dashadmin", "password": "wrong"})
+    bad = _login(client, "wrong")
     assert bad.status_code == 401
 
-    ok = client.post("/login", data={"username": "dashadmin", "password": "s3cret!"})
+    ok = _login(client, "s3cret!")
     assert ok.status_code in (302, 303)
 
     r = client.get("/metrics")
@@ -71,8 +86,14 @@ def test_login_flow_and_metrics(client, seeded):
     assert "victim" in r.text  # the seeded user shows up
 
 
+def test_login_rejected_without_csrf(client, seeded):
+    # No csrf token -> 400 (CSRF protection active)
+    r = client.post("/login", data={"username": "dashadmin", "password": "s3cret!"})
+    assert r.status_code == 400
+
+
 def test_user_detail_never_leaks_key_material(client, seeded):
-    client.post("/login", data={"username": "dashadmin", "password": "s3cret!"})
+    _login(client, "s3cret!")
     r = client.get(f"/users/{seeded['user_id']}")
     assert r.status_code == 200
     body = r.text

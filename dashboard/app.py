@@ -35,7 +35,7 @@ def create_app() -> FastAPI:
     app.add_middleware(
         SessionMiddleware,
         secret_key=secret,
-        https_only=False,        # set True behind TLS in prod
+        https_only=settings.dashboard_cookie_secure,  # set DASHBOARD_COOKIE_SECURE=true behind TLS
         same_site="lax",
     )
 

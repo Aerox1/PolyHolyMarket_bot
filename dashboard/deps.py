@@ -7,15 +7,16 @@ dashboard language is per-session (``dash_lang``), default English.
 
 from __future__ import annotations
 
+import secrets
 from collections.abc import Iterator
 from pathlib import Path
 
-from fastapi import Depends, Request
+from fastapi import Depends, Form, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from starlette.exceptions import HTTPException
-from starlette.status import HTTP_303_SEE_OTHER, HTTP_403_FORBIDDEN
+from starlette.status import HTTP_303_SEE_OTHER, HTTP_400_BAD_REQUEST, HTTP_403_FORBIDDEN
 
 from core.i18n import SUPPORTED, normalize_lang, t, text_dir
 from db.engine import SessionLocal
@@ -69,6 +70,23 @@ def dash_lang(request: Request) -> str:
     return normalize_lang(request.session.get("dash_lang", "en"))
 
 
+# ── CSRF (double-submit via session) ──────────────────────────────────────────
+
+def csrf_token(request: Request) -> str:
+    tok = request.session.get("csrf")
+    if not tok:
+        tok = secrets.token_urlsafe(32)
+        request.session["csrf"] = tok
+    return tok
+
+
+def verify_csrf(request: Request, csrf_token: str = Form("")) -> None:
+    """Validate the CSRF token on state-changing POSTs."""
+    expected = request.session.get("csrf")
+    if not expected or not secrets.compare_digest(csrf_token or "", expected):
+        raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail="CSRF check failed")
+
+
 def render(request: Request, name: str, *, admin: Admin | None = None, **ctx) -> HTMLResponse:
     """Render a Jinja template with i18n + theme direction injected."""
     lang = dash_lang(request)
@@ -77,6 +95,7 @@ def render(request: Request, name: str, *, admin: Admin | None = None, **ctx) ->
         "lang": lang,
         "dir": text_dir(lang),
         "supported_langs": SUPPORTED,
+        "csrf_token": csrf_token(request),
         "t": lambda key, **kw: t(key, lang, **kw),
         **ctx,
     }

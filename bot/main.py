@@ -20,7 +20,7 @@ from db.engine import async_session_factory
 from db.repositories.accounts import DbCredentialStore
 from polymarket.account_manager import AccountManager
 
-from bot import middleware
+from bot import jobs, middleware
 from bot.handlers import confirm, connect, inquiry, positions_ui, start, trading
 
 logger = logging.getLogger(__name__)
@@ -87,6 +87,9 @@ def build_application() -> Application:
     trading.register(app)
     positions_ui.register(app)
     confirm.register(app)  # ^ord_ok: / ^ord_no: confirmation callbacks
+
+    # Background jobs (broadcast delivery, …)
+    jobs.register_jobs(app)
 
     return app
 
