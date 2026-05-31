@@ -1,0 +1,30 @@
+# ── Telegram bot ─────────────────────────────────────────
+python-telegram-bot[job-queue]==22.7
+
+# ── Polymarket ───────────────────────────────────────────
+py-clob-client>=0.34.6
+httpx>=0.28
+
+# ── Database ─────────────────────────────────────────────
+SQLAlchemy[asyncio]>=2.0
+alembic>=1.13
+psycopg[binary]>=3.2        # sync driver (dashboard, alembic, worker)
+asyncpg>=0.30               # async driver (bot)
+
+# ── Admin dashboard ──────────────────────────────────────
+fastapi>=0.115
+uvicorn[standard]>=0.30
+jinja2>=3.1
+python-multipart>=0.0.9     # form login
+itsdangerous>=2.2           # signed session cookies
+argon2-cffi>=23.1           # admin password hashing
+
+# ── Security / config ────────────────────────────────────
+cryptography>=43            # Fernet encryption at rest
+pydantic>=2
+pydantic-settings>=2
+python-dotenv>=1.2
+
+# ── Dev / test ───────────────────────────────────────────
+pytest>=8
+pytest-asyncio>=0.24

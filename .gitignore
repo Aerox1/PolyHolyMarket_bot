@@ -1,0 +1,36 @@
+# ── Secrets — NEVER commit ───────────────────────────────
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+secrets/
+
+# ── Python ───────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+build/
+dist/
+
+# ── Local databases / data ───────────────────────────────
+*.sqlite
+*.sqlite3
+*.db
+pgdata/
+
+# ── Logs / tmp ───────────────────────────────────────────
+logs/
+*.log
+*.tmp
+*.bak
+
+# ── IDE / OS ─────────────────────────────────────────────
+.idea/
+.vscode/
+.DS_Store

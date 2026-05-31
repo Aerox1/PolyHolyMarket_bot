@@ -1,0 +1,28 @@
+{
+  "_meta": { "name": "中文", "dir": "ltr" },
+  "bot": {
+    "start": {
+      "welcome": "👋 欢迎使用 Polymarket 交易机器人，{name}！\n\n直接在 Telegram 中交易和管理您的 Polymarket 持仓。",
+      "choose_language": "🌐 请选择您的语言：",
+      "language_set": "✅ 语言已切换为中文。",
+      "menu_prompt": "您想做什么？"
+    },
+    "menu": {
+      "connect": "🔗 连接账户",
+      "create": "🆕 创建账户",
+      "portfolio": "📊 投资组合",
+      "positions": "📈 持仓",
+      "settings": "⚙️ 设置",
+      "help": "ℹ️ 帮助"
+    },
+    "connect": {
+      "enter_private_key": "🔐 现在请发送您的*私钥*。\n\n⚠️ 我会*立即删除*您的消息，以免留在聊天记录中。请勿向任何人透露此私钥。私钥在存储前会被加密。",
+      "success": "✅ *已连接！*\n\n钱包：`{wallet}`\nUSDC 余额：${balance}\n\n您现在可以查看持仓并进行交易。"
+    },
+    "error": {
+      "no_account": "⚠️ 请先连接 Polymarket 账户（ /connect ）。",
+      "suspended": "🚫 您的访问已被暂停，请联系客服。",
+      "banned": "🚫 您的访问权限已被撤销。"
+    }
+  }
+}
