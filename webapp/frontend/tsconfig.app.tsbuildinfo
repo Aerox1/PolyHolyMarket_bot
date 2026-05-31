@@ -1,1 +1,0 @@
-{"root":["./src/app.tsx","./src/api.ts","./src/format.ts","./src/main.tsx","./src/telegram.ts","./src/vite-env.d.ts","./src/components/betpanel.tsx","./src/components/categorycard.tsx","./src/components/marketcard.tsx","./src/components/status.tsx","./src/components/swipecard.tsx"],"version":"5.9.3"}
