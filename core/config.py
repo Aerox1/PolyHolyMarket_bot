@@ -60,6 +60,11 @@ class Settings(BaseSettings):
     webapp_base_url: str = Field("", alias="WEBAPP_BASE_URL")
     # initData freshness window (seconds) — reject replays older than this.
     initdata_max_age_seconds: int = Field(3600, alias="INITDATA_MAX_AGE_SECONDS")
+    # LOCAL DEV ONLY: when true, requests without valid Telegram initData are
+    # authenticated as a fixed test user, so the Mini App works in a plain
+    # browser. MUST be false in production.
+    webapp_dev_auth: bool = Field(False, alias="WEBAPP_DEV_AUTH")
+    webapp_dev_telegram_id: int = Field(999000001, alias="WEBAPP_DEV_TELEGRAM_ID")
 
     # ── Gemini (category card images) ─────────────────────
     gemini_api_key: str = Field("", alias="GEMINI_API_KEY")

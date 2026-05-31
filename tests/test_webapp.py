@@ -75,3 +75,13 @@ def test_bet_requires_account(client, monkeypatch):
                     json={"market_id": "0xabc", "outcome": "yes", "amount_usd": 5})
     assert r.status_code == 409
     assert r.json()["detail"] == "no_account"
+
+
+def test_dev_auth_allows_browser(client, monkeypatch):
+    """With WEBAPP_DEV_AUTH on, a browser session (no initData) is authed as a test user."""
+    from core.config import settings
+    monkeypatch.setattr(settings, "webapp_dev_auth", True)
+    r = client.get("/api/categories")  # no X-Telegram-Init-Data header
+    assert r.status_code == 200
+    me = client.get("/api/me").json()
+    assert me["telegram_id"] == settings.webapp_dev_telegram_id and me["connected"] is False

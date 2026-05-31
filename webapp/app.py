@@ -36,6 +36,11 @@ def create_app() -> FastAPI:
     setup_logging()
     app = FastAPI(title="Polymarket Mini App", docs_url=None, redoc_url=None)
 
+    if settings.webapp_dev_auth:
+        logger.warning("⚠️  WEBAPP_DEV_AUTH is ON — browser requests are authenticated as a "
+                       "test user (telegram_id=%s). NEVER enable this in production.",
+                       settings.webapp_dev_telegram_id)
+
     # Per-user signing client factory (this process has ENCRYPTION_KEY).
     app.state.account_manager = AccountManager(DbCredentialStore(async_session_factory()))
 

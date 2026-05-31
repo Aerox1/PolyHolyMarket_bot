@@ -15,7 +15,7 @@ from db.engine import async_session_factory
 from db.models import User, UserStatus
 from db.repositories import users as users_repo
 from polymarket.account_manager import AccountManager
-from webapp.initdata import InitDataError, validate
+from webapp.initdata import InitDataError, TelegramUser, validate
 
 
 async def get_db() -> AsyncIterator[AsyncSession]:
@@ -42,7 +42,13 @@ async def current_user(
     try:
         tg = validate(x_telegram_init_data or "")
     except InitDataError as exc:
-        raise HTTPException(status_code=HTTP_401_UNAUTHORIZED, detail=str(exc))
+        # LOCAL DEV ONLY: authenticate browser sessions (no real initData) as a
+        # fixed test user so the Mini App is usable outside Telegram.
+        if settings.webapp_dev_auth:
+            tg = TelegramUser(id=settings.webapp_dev_telegram_id, username="devtester",
+                              first_name="Dev", language_code=settings.default_language)
+        else:
+            raise HTTPException(status_code=HTTP_401_UNAUTHORIZED, detail=str(exc))
 
     user = await users_repo.get_or_create_user(
         db,
