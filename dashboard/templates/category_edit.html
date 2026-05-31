@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% set active_nav = 'miniapp' %}
+{% block title %}{{ cat.title }} · {{ t('dash.miniapp.title') }}{% endblock %}
+
+{% block content %}
+  <div class="page-head">
+    <h1 class="page-title">{{ t('dash.miniapp.edit_title') }} · {{ cat.title }}</h1>
+    <a class="btn sm" href="/miniapp">{{ t('dash.miniapp.back') }}</a>
+  </div>
+
+  <div class="grid-2">
+    {# ── Live preview ─────────────────────────────────────────────────────── #}
+    <div class="card">
+      <div class="card-header"><h2>{{ t('dash.miniapp.preview') }}</h2>
+        <span class="pill muted">{{ cat.image_status }}</span></div>
+      <div class="card-body" style="display:flex; justify-content:center;">
+        {% if cat.image_path %}
+          <img src="{{ cat.image_path }}?v={{ cat.image_generated_at or '' }}" alt=""
+               style="width:240px; max-width:100%; border-radius:12px; box-shadow:0 8px 24px rgba(0,0,0,.4);">
+        {% else %}
+          <div class="empty">{{ t('dash.miniapp.no_image') }}</div>
+        {% endif %}
+      </div>
+      {# Upload a replacement (no Gemini needed) #}
+      <div class="card-body">
+        <form method="POST" action="/miniapp/categories/{{ cat.id }}/upload" enctype="multipart/form-data"
+              style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="file" name="image" accept="image/png,image/jpeg,image/webp" required>
+          <button class="btn" type="submit">{{ t('dash.miniapp.upload') }}</button>
+        </form>
+        <div class="notice">{{ t('dash.miniapp.upload_note') }}</div>
+      </div>
+    </div>
+
+    {# ── Edit title + prompt + regenerate ─────────────────────────────────── #}
+    <div class="card">
+      <div class="card-header"><h2>{{ t('dash.miniapp.edit_title') }}</h2></div>
+      <div class="card-body">
+        <form method="POST" action="/miniapp/categories/{{ cat.id }}/edit">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <div class="field">
+            <label for="title">{{ t('dash.miniapp.category') }}</label>
+            <input class="input" id="title" name="title" type="text" value="{{ cat.title }}">
+          </div>
+          <div class="field">
+            <label for="prompt_override">{{ t('dash.miniapp.prompt') }}</label>
+            <textarea class="textarea" id="prompt_override" name="prompt_override" rows="6"
+                      placeholder="{{ t('dash.miniapp.prompt_placeholder') }}">{{ cat.prompt_override or '' }}</textarea>
+          </div>
+          <div class="notice">
+            <strong>{{ t('dash.miniapp.default_prompt') }}:</strong>
+            <span class="hint">{{ default_prompt }}</span>
+          </div>
+          <div class="checkbox-row">
+            <input type="checkbox" id="regenerate" name="regenerate" value="true">
+            <label for="regenerate">{{ t('dash.miniapp.regen_on_save') }}</label>
+          </div>
+          <button class="btn primary" type="submit">{{ t('dash.common.save') }}</button>
+        </form>
+      </div>
+      <div class="card-body"><div class="notice">{{ t('dash.miniapp.regen_note') }}</div></div>
+    </div>
+  </div>
+{% endblock %}

@@ -292,7 +292,8 @@ class Category(Base):
     # image (Gemini) — image_path is a cached file under the webapp static dir
     image_path: Mapped[str | None] = mapped_column(String(256))
     image_status: Mapped[str] = mapped_column(String(12), default="none", nullable=False)  # none|generating|ready|failed
-    image_prompt: Mapped[str | None] = mapped_column(Text)
+    image_prompt: Mapped[str | None] = mapped_column(Text)         # the prompt actually used
+    prompt_override: Mapped[str | None] = mapped_column(Text)      # admin-set custom prompt
     image_generated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # curation
     pinned: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

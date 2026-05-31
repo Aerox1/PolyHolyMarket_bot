@@ -112,7 +112,8 @@ async def generate_category_image(session: AsyncSession, category) -> str | None
         logger.info("Gemini weekly budget reached (%.2f/%.2f) — skipping %s", spent, budget, category.slug)
         return None
 
-    prompt = build_prompt(category.title)
+    # Admin-set custom prompt takes priority over the default two-sided template.
+    prompt = (getattr(category, "prompt_override", None) or "").strip() or build_prompt(category.title)
     await categories_repo.set_image(session, category.id, path=None, status="generating", prompt=prompt)
 
     try:

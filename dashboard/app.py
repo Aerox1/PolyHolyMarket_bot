@@ -42,6 +42,11 @@ def create_app() -> FastAPI:
     _STATIC_DIR.mkdir(parents=True, exist_ok=True)
     app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 
+    # Serve the generated category card images (read-only; no key needed) so the
+    # admin can preview them.
+    from core.gemini import cards_dir
+    app.mount("/cards", StaticFiles(directory=str(cards_dir())), name="cards")
+
     # Routers (each module exposes `router`).
     from dashboard import auth
     from dashboard.routers import pages

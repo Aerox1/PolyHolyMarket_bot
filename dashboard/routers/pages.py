@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -285,6 +285,53 @@ def miniapp_set_budget(
     audit.record(db, AuditEvent.GEMINI_BUDGET_SET, actor_type="admin", actor_id=admin.id,
                  detail={"weekly_budget": weekly_budget}, ip=_client_ip(request))
     return RedirectResponse("/miniapp", status_code=HTTP_303_SEE_OTHER)
+
+
+@router.get("/miniapp/categories/{category_id}")
+def miniapp_category_edit(request: Request, category_id: int,
+                          admin: Admin = Depends(require_admin), db: Session = Depends(get_db)):
+    cat = repo.get_category(db, category_id)
+    if cat is None:
+        raise HTTPException(status_code=404, detail="category not found")
+    from core.gemini import build_prompt
+    return deps.render(request, "category_edit.html", admin=admin, cat=cat,
+                       default_prompt=build_prompt(cat.title))
+
+
+@router.post("/miniapp/categories/{category_id}/edit")
+def miniapp_category_save(
+    request: Request,
+    category_id: int,
+    title: str = Form(""),
+    prompt_override: str = Form(""),
+    regenerate: bool = Form(False),
+    admin: Admin = Depends(require_admin),
+    db: Session = Depends(get_db),
+    _csrf: None = Depends(verify_csrf),
+):
+    if not repo.update_category(db, category_id, title=title, prompt_override=prompt_override, regenerate=regenerate):
+        raise HTTPException(status_code=404, detail="category not found")
+    return RedirectResponse(f"/miniapp/categories/{category_id}", status_code=HTTP_303_SEE_OTHER)
+
+
+@router.post("/miniapp/categories/{category_id}/upload")
+def miniapp_category_upload(
+    request: Request,
+    category_id: int,
+    image: UploadFile = File(...),
+    admin: Admin = Depends(require_admin),
+    db: Session = Depends(get_db),
+    _csrf: None = Depends(verify_csrf),
+):
+    data = image.file.read()
+    # accept PNG / JPEG / WEBP only
+    if not (data[:8] == b"\x89PNG\r\n\x1a\n" or data[:3] == b"\xff\xd8\xff" or data[8:12] == b"WEBP"):
+        raise HTTPException(status_code=400, detail="upload a PNG, JPEG or WEBP image")
+    if len(data) > 8 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="image too large (max 8MB)")
+    if not repo.save_category_image(db, category_id, data):
+        raise HTTPException(status_code=404, detail="category not found")
+    return RedirectResponse(f"/miniapp/categories/{category_id}", status_code=HTTP_303_SEE_OTHER)
 
 
 @router.post("/miniapp/categories/{category_id}")

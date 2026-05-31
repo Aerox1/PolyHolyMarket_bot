@@ -281,7 +281,18 @@
       "unhide": "Unhide",
       "regen": "Regenerate image",
       "no_categories": "No categories synced yet.",
-      "regen_note": "“Regenerate” clears the image so the Mini App service re-creates it on its next refresh (within the weekly budget)."
+      "regen_note": "“Regenerate” clears the image so the Mini App service re-creates it on its next refresh (within the weekly budget).",
+      "preview": "Preview",
+      "edit": "Edit",
+      "edit_title": "Edit category",
+      "back": "← Back to Mini App",
+      "no_image": "No image yet",
+      "upload": "Upload replacement",
+      "upload_note": "Upload a PNG/JPEG/WEBP to replace this card image directly (no Gemini call).",
+      "prompt": "Image prompt (custom)",
+      "prompt_placeholder": "Leave blank to use the default two-sided prompt…",
+      "default_prompt": "Default prompt",
+      "regen_on_save": "Regenerate image on save (uses this prompt, within budget)"
     }
   }
 }

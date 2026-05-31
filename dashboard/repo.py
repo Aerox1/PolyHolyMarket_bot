@@ -252,6 +252,38 @@ def curate_category(db: Session, category_id: int, action: str) -> bool:
     return True
 
 
+def get_category(db: Session, category_id: int) -> Category | None:
+    return db.get(Category, category_id)
+
+
+def update_category(db: Session, category_id: int, *, title: str | None = None,
+                    prompt_override: str | None = None, regenerate: bool = False) -> bool:
+    cat = db.get(Category, category_id)
+    if cat is None:
+        return False
+    if title is not None and title.strip():
+        cat.title = title.strip()
+    if prompt_override is not None:
+        cat.prompt_override = prompt_override.strip() or None
+    if regenerate:
+        cat.image_status = "none"
+        cat.image_path = None
+    return True
+
+
+def save_category_image(db: Session, category_id: int, data: bytes) -> bool:
+    """Save an admin-uploaded image as the category's card (no Gemini needed)."""
+    from core.gemini import cards_dir
+
+    cat = db.get(Category, category_id)
+    if cat is None:
+        return False
+    (cards_dir() / f"{cat.slug}.png").write_bytes(data)
+    cat.image_path = f"/cards/{cat.slug}.png"
+    cat.image_status = "ready"
+    return True
+
+
 def gemini_budget(db: Session) -> float:
     return appconfig.get_float_sync(db, appconfig.GEMINI_WEEKLY_BUDGET, settings.gemini_weekly_budget_usd)
 
