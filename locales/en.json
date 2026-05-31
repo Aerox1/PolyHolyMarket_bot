@@ -132,6 +132,14 @@
       "banned": "🚫 Your access has been revoked.",
       "rate_limited": "⏳ Too many requests — please slow down.",
       "generic": "⚠️ Something went wrong. Please try again."
+    },
+    "discover": {
+      "trending_header": "🔥 *Trending markets*",
+      "categories_header": "🗂 *Trending categories*",
+      "market_line": "*{n}.* {q}\n   YES {yes} · NO {no} · {vol} vol",
+      "category_line": "*{n}.* {title} — {vol} vol",
+      "trade_hint": "_Tap a token id to copy, then /marketbuy <token> <usd> or /buy._",
+      "none": "No markets available right now. Try again shortly."
     }
   },
   "dash": {

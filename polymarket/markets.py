@@ -129,6 +129,24 @@ def category_markets(tag_slug: str, limit: int = 40) -> list[dict]:
     return deduped[:limit]
 
 
+def trending_markets(limit: int = 12) -> list[dict]:
+    """Top binary markets across all of Polymarket by 24h volume."""
+    with _client() as c:
+        r = c.get("/markets", params={"order": "volume24hr", "ascending": "false",
+                                      "closed": "false", "active": "true", "limit": max(limit * 3, 30)})
+        r.raise_for_status()
+        rows = _as_list(r.json())
+    out: list[dict] = []
+    seen: set[str] = set()
+    for m in rows:
+        nm = _normalize_market(m)
+        if nm and nm["id"] and nm["id"] not in seen:
+            seen.add(nm["id"])
+            out.append(nm)
+    out.sort(key=lambda x: x["volume"], reverse=True)
+    return out[:limit]
+
+
 def get_market(condition_id: str) -> dict | None:
     with _client() as c:
         r = c.get("/markets", params={"condition_ids": condition_id, "limit": 1})

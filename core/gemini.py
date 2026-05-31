@@ -41,15 +41,16 @@ def cards_dir() -> Path:
 
 def build_prompt(title: str) -> str:
     return (
-        f"Create a striking, premium editorial KEY ART illustration that instantly evokes "
-        f"the topic \"{title}\" for a sleek prediction-market mobile app. "
-        "Style: bold modern poster art / cinematic concept art, dramatic rim lighting and "
-        "volumetric glow, rich saturated complementary colors, deep contrast, a clear "
-        "focal subject or iconic symbol of the topic, dynamic diagonal composition, subtle "
-        "depth and atmosphere, vertical 9:16 full-bleed framing. "
-        "Keep the upper third and lower third visually calmer (gradient/negative space) so "
-        "overlaid UI text stays legible. "
-        "ABSOLUTELY NO text, words, letters, numbers, captions, logos, signatures, UI, or "
+        f"A dramatic TWO-SIDED VERSUS battle poster for the topic \"{title}\", depicting it as a "
+        f"head-to-head showdown between two opposing sides. "
+        "Composition: a symmetrical split-screen face-off — left side VS right side — clashing at a "
+        "charged, glowing dividing line straight down the middle of a vertical 9:16 frame. "
+        "Two rival forces / symbolic champions representing each outcome confront each other with "
+        "high tension and motion. Style: epic fighting-game splash art meets boxing/MMA fight poster "
+        "— cinematic rim lighting, sparks and energy bursts at the central clash point, bold CONTRASTING "
+        "color palettes for the two sides (one warm/red, one cool/blue), deep contrast, vivid and punchy. "
+        "Keep the upper third and lower third calmer (gradient / negative space) so overlaid UI text "
+        "stays legible. ABSOLUTELY NO text, words, letters, numbers, scores, logos, signatures, or "
         "watermarks anywhere in the image — pure imagery only."
     )
 
