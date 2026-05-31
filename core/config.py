@@ -72,6 +72,8 @@ class Settings(BaseSettings):
             return url.replace("postgresql+psycopg://", "postgresql+asyncpg://", 1)
         if url.startswith("postgresql://"):
             return url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        if url.startswith("sqlite://") and "+aiosqlite" not in url:
+            return url.replace("sqlite://", "sqlite+aiosqlite://", 1)
         return url
 
     @property

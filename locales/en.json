@@ -1,11 +1,15 @@
 {
-  "_meta": { "name": "English", "dir": "ltr" },
+  "_meta": {
+    "name": "English",
+    "dir": "ltr"
+  },
   "bot": {
     "start": {
       "welcome": "👋 Welcome to the Polymarket trading bot, {name}!\n\nTrade and manage your Polymarket positions right here in Telegram.",
       "choose_language": "🌐 Please choose your language:",
       "language_set": "✅ Language set to English.",
-      "menu_prompt": "What would you like to do?"
+      "menu_prompt": "What would you like to do?",
+      "help_text": "ℹ️ *Help*\n\n*Getting started*\n/start — open the main menu\n/connect — connect a Polymarket wallet\n/disconnect — remove a connected wallet\n\n*Account & markets*\n/portfolio — portfolio summary\n/positions — open positions\n/balance — USDC balance\n/orders — open orders\n/trades — recent trades\n/activity — recent activity\n/search <query> — find markets\n/market <condition_id> — market details\n/price <token_id> — current prices\n/book <token_id> — order book\n\nYour wallet credentials are encrypted and never shared. Use /cancel to abort any step."
     },
     "menu": {
       "connect": "🔗 Connect Account",
@@ -36,12 +40,15 @@
       "validation_failed": "❌ Could not validate the wallet. Please check your key and try again.",
       "success": "✅ *Connected!*\n\nWallet: `{wallet}`\nUSDC balance: ${balance}\n\nYou can now view positions and trade.",
       "cancelled": "Connection cancelled. Nothing was saved.",
-      "timeout": "⌛ Connection timed out. Nothing was saved — start again with /connect."
+      "timeout": "⌛ Connection timed out. Nothing was saved — start again with /connect.",
+      "default_label": "Main"
     },
     "disconnect": {
       "confirm": "Disconnect wallet `{wallet}`? Your stored key will be permanently deleted.",
       "done": "✅ Disconnected. Your stored credentials were deleted.",
-      "none": "You have no connected account to disconnect."
+      "none": "You have no connected account to disconnect.",
+      "button": "{label} — {wallet}",
+      "choose": "Which wallet do you want to disconnect?"
     },
     "account": {
       "none": "You haven't connected an account yet. Tap *Connect Account* or use /connect.",
@@ -58,7 +65,9 @@
       "no_orders": "You have no open orders.",
       "trades_header": "🧾 *Recent trades:*",
       "no_trades": "No trades yet.",
-      "activity_header": "🕑 *Recent activity:*"
+      "activity_header": "🕑 *Recent activity:*",
+      "position_value": "Value",
+      "no_activity": "No recent activity."
     },
     "market": {
       "search_usage": "Usage: /search <query>",
@@ -68,7 +77,13 @@
       "price": "💵 {outcome}: ${price}",
       "market_usage": "Usage: /market <condition_id>",
       "price_usage": "Usage: /price <token_id>",
-      "book_usage": "Usage: /book <token_id>"
+      "book_usage": "Usage: /book <token_id>",
+      "detail": "📈 *{question}*\n\nOutcomes: {outcomes}\nPrices: {prices}\nVolume: ${volume}\nLiquidity: ${liquidity}\nEnds: {end_date}\nTokens: `{tokens}`",
+      "price_detail": "💲 *Price* `{token}`\n\nBest bid: ${bid}\nBest ask: ${ask}\nMidpoint: ${mid}\nSpread: {spread}",
+      "book_header": "📗 *Order book* `{token}`",
+      "book_asks": "*Asks (sell):*",
+      "book_bids": "*Bids (buy):*",
+      "no_book": "No order book available for `{token}`."
     },
     "trade": {
       "buy_usage": "Usage: /buy <token_id> <price> <size>",

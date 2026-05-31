@@ -5,7 +5,8 @@
       "welcome": "👋 欢迎使用 Polymarket 交易机器人，{name}！\n\n直接在 Telegram 中交易和管理您的 Polymarket 持仓。",
       "choose_language": "🌐 请选择您的语言：",
       "language_set": "✅ 语言已切换为中文。",
-      "menu_prompt": "您想做什么？"
+      "menu_prompt": "您想做什么？",
+      "help_text": "ℹ️ *帮助*\n\n*开始使用*\n/start — 打开主菜单\n/connect — 连接 Polymarket 钱包\n/disconnect — 移除已连接的钱包\n\n*账户与市场*\n/portfolio — 投资组合概览\n/positions — 持仓\n/balance — USDC 余额\n/orders — 未成交订单\n/trades — 近期成交\n/activity — 近期动态\n/search <关键词> — 搜索市场\n/market <condition_id> — 市场详情\n/price <token_id> — 当前价格\n/book <token_id> — 订单簿\n\n您的钱包凭据已加密，绝不会被分享。使用 /cancel 可中止任何步骤。"
     },
     "menu": {
       "connect": "🔗 连接账户",
