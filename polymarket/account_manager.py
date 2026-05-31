@@ -87,6 +87,12 @@ class AccountManager:
     async def list_accounts(self, user_id: int) -> list[AccountMeta]:
         return await self._store.list_accounts(user_id)
 
+    async def default_account_id(self, user_id: int, account_id: int | None = None) -> int | None:
+        """Resolve which account a trade/log should target."""
+        if account_id is not None:
+            return account_id
+        return await self._store.default_account_id(user_id)
+
     def invalidate(self, user_id: int, account_id: int | None = None) -> None:
         """Drop cached client(s) on connect/disconnect/error."""
         if account_id is not None:

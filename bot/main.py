@@ -21,7 +21,7 @@ from db.repositories.accounts import DbCredentialStore
 from polymarket.account_manager import AccountManager
 
 from bot import middleware
-from bot.handlers import connect, inquiry, start
+from bot.handlers import confirm, connect, inquiry, positions_ui, start, trading
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +34,13 @@ COMMANDS = [
     BotCommand("balance", "USDC balance"),
     BotCommand("orders", "Open orders"),
     BotCommand("trades", "Recent trades"),
+    BotCommand("manage", "Manage positions (sell/close)"),
+    BotCommand("buy", "Limit buy: /buy <token> <price> <size>"),
+    BotCommand("sell", "Limit sell: /sell <token> <price> <size>"),
+    BotCommand("marketbuy", "Market buy: /marketbuy <token> <usd>"),
+    BotCommand("marketsell", "Market sell: /marketsell <token> <shares>"),
+    BotCommand("cancel", "Cancel an order: /cancel <order_id>"),
+    BotCommand("cancelall", "Cancel all open orders"),
     BotCommand("search", "Search markets"),
     BotCommand("price", "Token price"),
     BotCommand("language", "Change language"),
@@ -77,6 +84,9 @@ def build_application() -> Application:
     start.register(app)
     connect.register(app)
     inquiry.register(app)
+    trading.register(app)
+    positions_ui.register(app)
+    confirm.register(app)  # ^ord_ok: / ^ord_no: confirmation callbacks
 
     return app
 

@@ -107,7 +107,8 @@
       "yes": "✅ Confirm",
       "no": "❌ Cancel",
       "expired": "⌛ This confirmation expired. Please run the command again.",
-      "aborted": "Cancelled — no order was placed."
+      "aborted": "Cancelled — no order was placed.",
+      "cancel": "Cancel order `{order_id}`?"
     },
     "order": {
       "placed": "✅ Order placed.\nID: `{order_id}`\nStatus: {status}",
