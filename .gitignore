@@ -43,3 +43,8 @@ logs/
 
 # TS build cache
 *.tsbuildinfo
+
+# SQLite sidecar files
+*.db-wal
+*.db-shm
+*.db-journal
