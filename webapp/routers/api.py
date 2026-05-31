@@ -20,6 +20,7 @@ from db.models import User
 from db.repositories import accounts as accounts_repo
 from db.repositories import categories as categories_repo
 from db.repositories import orders as orders_repo
+from db.repositories import stats as stats_repo
 from polymarket import markets
 from polymarket.credentials import NoAccountConnected, TradingUnavailable
 from webapp.deps import current_user, get_db, manager
@@ -42,7 +43,62 @@ async def me(user: User = Depends(current_user), db: AsyncSession = Depends(get_
         "language": user.language,
         "connected": acc is not None,
         "wallet": acc.wallet_address if acc else None,
+        "stats": await stats_repo.get_stats(db, user.id),
     }
+
+
+def _parse_usdc(raw) -> float:
+    try:
+        v = float(raw)
+    except (TypeError, ValueError):
+        return 0.0
+    return v / 1e6 if v > 1_000_000 else v
+
+
+@router.get("/portfolio")
+async def portfolio(request: Request, user: User = Depends(current_user)) -> dict:
+    mgr = manager(request)
+    try:
+        ro = await mgr.get_readonly_client(user.id)
+    except NoAccountConnected:
+        raise HTTPException(status_code=409, detail="no_account")
+    raw = await asyncio.to_thread(ro.get_positions)
+    rows = raw if isinstance(raw, list) else (raw.get("data") or raw.get("positions") or [])
+    positions = []
+    for p in rows[:30] if isinstance(rows, list) else []:
+        if not isinstance(p, dict):
+            continue
+        positions.append({
+            "title": p.get("title") or p.get("market"),
+            "outcome": p.get("outcome"),
+            "size": _num(p.get("size")),
+            "value": _num(p.get("currentValue") if p.get("currentValue") is not None else p.get("curValue")),
+            "pnl": _num(p.get("cashPnl") if p.get("cashPnl") is not None else p.get("pnl")),
+        })
+    # Balance needs L2 (trading client) — best-effort.
+    balance = None
+    try:
+        pm = await mgr.get_trading_client(user.id)
+        bal = await asyncio.to_thread(pm.get_balance)
+        balance = _parse_usdc(bal.get("balance")) if isinstance(bal, dict) else None
+    except Exception as exc:  # noqa: BLE001 — balance is best-effort (incl. TradingUnavailable)
+        logger.info("portfolio balance unavailable: %s", type(exc).__name__)
+    return {"balance": balance, "positions": positions}
+
+
+@router.get("/leaderboard")
+async def leaderboard(metric: str = "bets", user: User = Depends(current_user),
+                      db: AsyncSession = Depends(get_db)) -> dict:
+    metric = metric if metric in ("bets", "volume") else "bets"
+    rows = await stats_repo.leaderboard(db, metric=metric, limit=20)
+    return {"metric": metric, "rows": rows, "me": await stats_repo.get_stats(db, user.id)}
+
+
+def _num(v):
+    try:
+        return float(v) if v is not None else None
+    except (TypeError, ValueError):
+        return None
 
 
 # ── categories & markets ──────────────────────────────────────────────────────
@@ -137,5 +193,10 @@ async def place_bet(
                                     title=m.get("question"), error=None if ok else "rejected")
     if not ok:
         raise HTTPException(status_code=502, detail="order_rejected")
+    # Gamification: count the bet toward streak + totals.
+    try:
+        await stats_repo.record_bet(db, user.id, amount)
+    except Exception as exc:  # noqa: BLE001 — stats must never block a trade result
+        logger.warning("record_bet failed: %s", type(exc).__name__)
     return {"ok": True, "order_id": order_id, "outcome": outcome, "amount": amount,
             "question": m.get("question")}

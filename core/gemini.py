@@ -41,12 +41,16 @@ def cards_dir() -> Path:
 
 def build_prompt(title: str) -> str:
     return (
-        f"A bold, dramatic editorial digital illustration evoking the topic \"{title}\" "
-        "for a prediction-market app. Cinematic lighting, vivid saturated colors, high "
-        "contrast, modern poster art, strong dynamic composition, full-bleed background. "
-        "Absolutely NO text, NO words, NO letters, NO numbers, NO logos, NO watermarks, "
-        "NO captions anywhere in the image. Leave visual breathing room so UI text can be "
-        "overlaid on top."
+        f"Create a striking, premium editorial KEY ART illustration that instantly evokes "
+        f"the topic \"{title}\" for a sleek prediction-market mobile app. "
+        "Style: bold modern poster art / cinematic concept art, dramatic rim lighting and "
+        "volumetric glow, rich saturated complementary colors, deep contrast, a clear "
+        "focal subject or iconic symbol of the topic, dynamic diagonal composition, subtle "
+        "depth and atmosphere, vertical 9:16 full-bleed framing. "
+        "Keep the upper third and lower third visually calmer (gradient/negative space) so "
+        "overlaid UI text stays legible. "
+        "ABSOLUTELY NO text, words, letters, numbers, captions, logos, signatures, UI, or "
+        "watermarks anywhere in the image — pure imagery only."
     )
 
 

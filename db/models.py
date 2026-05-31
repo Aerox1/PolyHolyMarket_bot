@@ -323,6 +323,28 @@ class GeminiUsage(Base):
     __table_args__ = (Index("ix_gemini_usage_ts", "ts"),)
 
 
+class UserStats(Base):
+    """Gamification stats derived from real betting activity (daily streak +
+    totals). Updated on every successful bet from the bot or the Mini App."""
+
+    __tablename__ = "user_stats"
+
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    current_streak: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    longest_streak: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_active_date: Mapped[str | None] = mapped_column(String(10))  # 'YYYY-MM-DD' (UTC)
+    total_bets: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    total_volume_usd: Mapped[float] = mapped_column(Numeric(20, 2), default=0, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        Index("ix_user_stats_bets", "total_bets"),
+        Index("ix_user_stats_volume", "total_volume_usd"),
+    )
+
+
 class AppConfig(Base):
     """Runtime-editable key/value config (e.g. the live Gemini weekly budget),
     so admins can change settings without a redeploy."""

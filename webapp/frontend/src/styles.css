@@ -357,6 +357,273 @@ body {
   margin: 0 0 18px;
 }
 
+/* ── Persistent header bar ─────────────────────────────────── */
+.header-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: calc(10px + env(safe-area-inset-top)) 12px 10px;
+  /* Non-blocking: only the chips/buttons capture taps so swipes pass through. */
+  pointer-events: none;
+}
+.header-bar > * {
+  pointer-events: auto;
+}
+.header-spacer {
+  flex: 1;
+  pointer-events: none;
+}
+.streak-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 800;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(8px);
+}
+.header-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(8px);
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.08s ease;
+}
+.header-btn:active {
+  transform: scale(0.92);
+}
+
+/* ── Bet preview line ──────────────────────────────────────── */
+.bet-preview {
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 12px 14px;
+  margin-bottom: 14px;
+}
+.preview-line {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+.preview-sub {
+  font-size: 12.5px;
+  color: var(--hint);
+  margin-top: 4px;
+  line-height: 1.35;
+}
+
+/* ── Shared sheet helpers ──────────────────────────────────── */
+.sheet-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 12px;
+  padding: 26px 6px;
+}
+.sheet-center .emoji {
+  font-size: 40px;
+}
+.sheet-muted {
+  font-size: 14px;
+  color: var(--hint);
+  margin: 0;
+  max-width: 300px;
+  line-height: 1.45;
+}
+
+/* ── Portfolio sheet ───────────────────────────────────────── */
+.balance-card {
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+.balance-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--hint);
+}
+.balance-value {
+  font-size: 28px;
+  font-weight: 800;
+  margin-top: 2px;
+}
+.position-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.position-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.position-main {
+  flex: 1;
+  min-width: 0;
+}
+.position-title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.position-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 5px;
+}
+.outcome-tag {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.outcome-tag.yes {
+  color: var(--yes);
+  background: rgba(22, 199, 132, 0.16);
+}
+.outcome-tag.no {
+  color: var(--no);
+  background: rgba(234, 57, 67, 0.16);
+}
+.position-size {
+  font-size: 12px;
+  color: var(--hint);
+}
+.position-numbers {
+  text-align: right;
+  flex-shrink: 0;
+}
+.position-value {
+  font-size: 15px;
+  font-weight: 700;
+}
+.position-pnl {
+  font-size: 13px;
+  font-weight: 700;
+  margin-top: 2px;
+}
+.position-pnl.pos {
+  color: var(--yes);
+}
+.position-pnl.neg {
+  color: var(--no);
+}
+
+/* ── Leaderboard sheet ─────────────────────────────────────── */
+.lb-toggle {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.lb-toggle-btn {
+  flex: 1;
+  border: 2px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  border-radius: 14px;
+  padding: 11px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+.lb-toggle-btn.active {
+  border-color: var(--button);
+  background: rgba(51, 144, 236, 0.18);
+}
+.lb-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.lb-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.lb-row.mine {
+  border-color: var(--button);
+  background: rgba(51, 144, 236, 0.18);
+}
+.lb-rank {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--hint);
+  width: 36px;
+  flex-shrink: 0;
+}
+.lb-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lb-value {
+  font-size: 14px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.lb-streak {
+  font-size: 13px;
+  font-weight: 700;
+  flex-shrink: 0;
+  width: 52px;
+  text-align: right;
+}
+.lb-footer {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(51, 144, 236, 0.16);
+  border: 1px solid var(--button);
+  font-size: 14px;
+  font-weight: 700;
+  text-align: center;
+}
+
 /* ── Full-screen status states ─────────────────────────────── */
 .status {
   position: absolute;

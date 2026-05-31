@@ -1,11 +1,49 @@
 // Same-origin API client. Every request sends the Telegram initData header.
 import { initDataHeader } from "./telegram";
 
+export interface Stats {
+  current_streak: number;
+  longest_streak: number;
+  total_bets: number;
+  total_volume_usd: number;
+  rank_bets: number;
+}
+
 export interface Me {
   telegram_id: number;
   language: string | null;
   connected: boolean;
   wallet: string | null;
+  stats: Stats;
+}
+
+export interface Position {
+  title: string;
+  outcome: string;
+  size: number;
+  value: number;
+  pnl: number;
+}
+
+export interface Portfolio {
+  balance: number | null;
+  positions: Position[];
+}
+
+export type LeaderboardMetric = "bets" | "volume";
+
+export interface LeaderboardRow {
+  rank: number;
+  name: string;
+  bets: number;
+  volume_usd: number;
+  streak: number;
+}
+
+export interface Leaderboard {
+  metric: LeaderboardMetric;
+  rows: LeaderboardRow[];
+  me: Stats;
 }
 
 export interface Category {
@@ -95,4 +133,7 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  portfolio: () => request<Portfolio>("/api/portfolio"),
+  leaderboard: (metric: LeaderboardMetric) =>
+    request<Leaderboard>(`/api/leaderboard?metric=${metric}`),
 };

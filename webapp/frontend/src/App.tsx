@@ -12,6 +12,9 @@ import { SwipeCard, type Dir } from "./components/SwipeCard";
 import { CategoryCardContent, categoryBackground } from "./components/CategoryCard";
 import { MarketCardContent, marketBackground } from "./components/MarketCard";
 import { BetPanel } from "./components/BetPanel";
+import { HeaderBar } from "./components/HeaderBar";
+import { PortfolioSheet } from "./components/PortfolioSheet";
+import { LeaderboardSheet } from "./components/LeaderboardSheet";
 import { Loading, StatusScreen } from "./components/Status";
 
 type Level = "CATEGORY" | "MARKETS";
@@ -44,7 +47,33 @@ export default function App() {
   const [marketsError, setMarketsError] = useState<string | null>(null);
 
   const [betMarket, setBetMarket] = useState<Market | null>(null);
+  const [showPortfolio, setShowPortfolio] = useState(false);
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [exitDir, setExitDir] = useState<Dir | null>(null);
+
+  // Open/close helpers fire a light haptic (guarded inside `haptic`).
+  const openPortfolio = useCallback(() => {
+    haptic("light");
+    setShowLeaderboard(false);
+    setShowPortfolio(true);
+  }, []);
+  const closePortfolio = useCallback(() => {
+    haptic("light");
+    setShowPortfolio(false);
+  }, []);
+  const openLeaderboard = useCallback(() => {
+    haptic("light");
+    setShowPortfolio(false);
+    setShowLeaderboard(true);
+  }, []);
+  const closeLeaderboard = useCallback(() => {
+    haptic("light");
+    setShowLeaderboard(false);
+  }, []);
+  const closeBet = useCallback(() => {
+    haptic("light");
+    setBetMarket(null);
+  }, []);
 
   // ── boot ──────────────────────────────────────────────────
   useEffect(() => {
@@ -79,13 +108,22 @@ export default function App() {
   }, [loadCore]);
 
   // ── native BackButton wiring ──────────────────────────────
+  // An overlay (bet panel / portfolio / leaderboard) takes priority over
+  // level navigation: Back closes the topmost open overlay first, and only
+  // falls back to CATEGORY navigation when nothing is open.
   useEffect(() => {
     const w = tg();
     if (!w) return;
-    const showBack = level === "MARKETS" || betMarket != null;
+    const anyOverlay =
+      betMarket != null || showPortfolio || showLeaderboard;
+    const showBack = level === "MARKETS" || anyOverlay;
     const onBack = () => {
       if (betMarket != null) {
-        setBetMarket(null);
+        closeBet();
+      } else if (showPortfolio) {
+        closePortfolio();
+      } else if (showLeaderboard) {
+        closeLeaderboard();
       } else if (level === "MARKETS") {
         setLevel("CATEGORY");
         setMarkets(null);
@@ -102,7 +140,15 @@ export default function App() {
         /* no-op */
       }
     };
-  }, [level, betMarket]);
+  }, [
+    level,
+    betMarket,
+    showPortfolio,
+    showLeaderboard,
+    closeBet,
+    closePortfolio,
+    closeLeaderboard,
+  ]);
 
   const enterCategory = useCallback(async (cat: Category) => {
     setMarketsLoading(true);
@@ -219,6 +265,12 @@ export default function App() {
 
   return (
     <div className="app">
+      <HeaderBar
+        me={me}
+        onPortfolio={openPortfolio}
+        onLeaderboard={openLeaderboard}
+      />
+
       {level === "CATEGORY" ? (
         <>
           <SwipeCard
@@ -251,8 +303,12 @@ export default function App() {
             key="bet"
             market={betMarket}
             connected={me?.connected ?? false}
-            onClose={() => setBetMarket(null)}
+            onClose={closeBet}
           />
+        ) : showPortfolio ? (
+          <PortfolioSheet key="portfolio" onClose={closePortfolio} />
+        ) : showLeaderboard ? (
+          <LeaderboardSheet key="leaderboard" onClose={closeLeaderboard} />
         ) : null}
       </AnimatePresence>
     </div>

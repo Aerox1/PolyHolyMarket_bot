@@ -1,7 +1,14 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { api, ApiError, type Market } from "../api";
-import { pricePercent, usd } from "../format";
+import {
+  isValidPrice,
+  payoutFor,
+  pricePercent,
+  sharesFor,
+  usd,
+  usdCents,
+} from "../format";
 import { closeApp, notify, haptic } from "../telegram";
 
 const PRESETS = [1, 5, 20, 100];
@@ -124,6 +131,14 @@ export function BetPanel({
 
   const canConfirm = side != null && amount != null && !submitting;
 
+  // Bet preview: derive shares + payout from the selected side's price.
+  const entryPrice =
+    side === "yes" ? market.yes_price : side === "no" ? market.no_price : null;
+  const shares = sharesFor(amount, entryPrice);
+  const payout = payoutFor(amount, entryPrice);
+  const showPreview =
+    side != null && amount != null && isValidPrice(entryPrice) && shares != null && payout != null;
+
   return sheet(
     <>
       <h2>{market.question}</h2>
@@ -166,6 +181,19 @@ export function BetPanel({
           </button>
         ))}
       </div>
+
+      {showPreview ? (
+        <div className="bet-preview">
+          <div className="preview-line">
+            ≈ {shares!.toFixed(1)} shares · pays {usdCents(payout)} if{" "}
+            {side === "yes" ? "YES" : "NO"} wins
+          </div>
+          <div className="preview-sub">
+            Entry price {pricePercent(entryPrice)} · Market order — final price
+            may move slightly.
+          </div>
+        </div>
+      ) : null}
 
       {error ? (
         <div className="warn-money" style={{ color: "var(--no)", marginBottom: 12 }}>

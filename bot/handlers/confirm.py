@@ -200,6 +200,9 @@ async def _execute(update: Update, context: ContextTypes.DEFAULT_TYPE, intent: d
         await _log_order(account_id, intent, status=("open" if ok else "rejected"),
                          clob_order_id=order_id, error=None if ok else "rejected")
 
+    if ok and user_id is not None:
+        await _record_activity(user_id, intent)
+
     if not ok:
         await respond("bot.order.failed")
     elif kind == "close":
@@ -227,6 +230,26 @@ async def _audit(event: AuditEvent, user_id: int | None, account_id: int | None,
                                      user_id=user_id, account_id=account_id, detail=detail)
     except Exception as exc:  # noqa: BLE001 — auditing must never block a trade
         logger.warning("audit %s failed: %s", event, type(exc).__name__)
+
+
+def _notional_usd(intent: dict) -> float:
+    """Best-effort USD notional for the volume leaderboard."""
+    kind = intent.get("kind")
+    if kind == "market":
+        return float(intent.get("amount") or 0)
+    if kind == "limit":
+        return float(intent.get("price") or 0) * float(intent.get("size") or 0)
+    return 0.0  # close/sell by shares — counts as a bet, no USD notional
+
+
+async def _record_activity(user_id: int, intent: dict) -> None:
+    """Count a successful order toward the user's streak + totals."""
+    try:
+        from db.repositories import stats as stats_repo
+        async with async_session_scope() as session:
+            await stats_repo.record_bet(session, user_id, _notional_usd(intent))
+    except Exception as exc:  # noqa: BLE001 — gamification must never block a trade
+        logger.warning("record_activity failed: %s", type(exc).__name__)
 
 
 async def _log_order(account_id: int, intent: dict, *, status: str,

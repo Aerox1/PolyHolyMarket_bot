@@ -28,6 +28,44 @@ export function usd(n: number): string {
   return `$${n.toLocaleString("en-US")}`;
 }
 
+// 12.5 -> "$12.50", null -> "—" (cents-precise money display)
+export function usdCents(n: number | null | undefined): string {
+  if (n == null || Number.isNaN(n)) return "—";
+  return `$${n.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+// Signed money for P&L: 3.5 -> "+$3.50", -2 -> "-$2.00".
+export function usdSigned(n: number | null | undefined): string {
+  if (n == null || Number.isNaN(n)) return "—";
+  const sign = n < 0 ? "-" : "+";
+  return `${sign}${usdCents(Math.abs(n))}`;
+}
+
+// True only when price is a usable probability strictly inside (0, 1).
+export function isValidPrice(p: number | null | undefined): p is number {
+  return typeof p === "number" && !Number.isNaN(p) && p > 0 && p < 1;
+}
+
+// shares ≈ amount / price (price must be valid). Returns null otherwise.
+export function sharesFor(
+  amount: number | null | undefined,
+  price: number | null | undefined,
+): number | null {
+  if (amount == null || amount <= 0 || !isValidPrice(price)) return null;
+  return amount / price;
+}
+
+// potential_payout ≈ shares * $1 == amount / price.
+export function payoutFor(
+  amount: number | null | undefined,
+  price: number | null | undefined,
+): number | null {
+  return sharesFor(amount, price); // shares * $1 == shares
+}
+
 // Stable string hash -> hue 0..359.
 function hashHue(str: string): number {
   let h = 0;
