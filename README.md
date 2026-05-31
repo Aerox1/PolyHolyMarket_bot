@@ -94,10 +94,27 @@ Foundation tests cover encryption round-trip/rotation, i18n fallback + RTL + no-
 
 ---
 
-## Status
+## Bot commands
 
-- **Phase 0 — Foundations:** ✅ config, crypto, i18n, DB models/engine, Alembic, tests, Docker.
-- **Phase 1 — Connect + monitoring:** 🚧
-- **Phase 2 — Trading + position management:** ⏳
-- **Phase 3 — Admin dashboard:** ⏳
-- **Phase 4 — Hardening, full translations, deploy:** ⏳
+| Command | What it does |
+|---|---|
+| `/start` | Welcome + language picker + main menu (Connect / Create) |
+| `/connect` | Connect a wallet (type → address → key); key message auto-deleted, encrypted |
+| `/disconnect` | Remove a connected wallet (deletes the stored key) |
+| `/language` | Change language (EN / FA / RU / ZH) |
+| `/portfolio` `/positions` `/balance` `/orders` `/trades` `/activity` | Account monitoring |
+| `/search` `/market` `/price` `/book` | Market data |
+| `/buy` `/sell` | Limit order: `<token> <price> <size>` (inline confirm) |
+| `/marketbuy <token> <usd>` `/marketsell <token> <shares>` | Market orders (inline confirm) |
+| `/manage` | Positions with **[Sell 50%] [Close]** buttons |
+| `/close <token>` · `/cancel <id>` · `/cancelall` | Close position / cancel order(s) |
+
+## Status — all phases complete ✅
+
+- **Phase 0 — Foundations:** config, Fernet crypto + argon2, i18n (4 langs, RTL), DB schema, Alembic, Docker.
+- **Phase 1 — Connect + monitoring:** per-user encrypted-key client, AccountManager, connect flow, monitoring.
+- **Phase 2 — Trading + position management:** buy/sell/market/close/cancel with inline confirm + audit + order logging.
+- **Phase 3 — Admin dashboard:** FastAPI, auth, users/metrics/broadcast/audit, dark theme + RTL, never exposes keys.
+- **Phase 4 — Hardening:** full FA/RU/ZH translations, broadcast delivery worker, per-user rate limit, dashboard CSRF, prod cookie flag.
+
+**37 tests passing** (crypto, i18n, models, AccountManager, repo round-trip, trading logic, dashboard e2e + no-key-leak).

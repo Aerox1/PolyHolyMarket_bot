@@ -152,7 +152,10 @@ async def _execute(update: Update, context: ContextTypes.DEFAULT_TYPE, intent: d
     token = intent.get("token_id", "")
 
     await respond("bot.trade.placing")
-    await _audit(AuditEvent.ORDER_SUBMIT, user_id, account_id, _safe_detail(intent))
+    submit_event = (
+        AuditEvent.CANCEL_SUBMIT if kind in ("cancel", "cancel_all") else AuditEvent.ORDER_SUBMIT
+    )
+    await _audit(submit_event, user_id, account_id, _safe_detail(intent))
 
     try:
         if kind == "limit":
@@ -178,8 +181,11 @@ async def _execute(update: Update, context: ContextTypes.DEFAULT_TYPE, intent: d
 
     # ── interpret result ──
     if kind in ("cancel", "cancel_all"):
-        await _audit(AuditEvent.CANCEL_RESULT, user_id, account_id, {"kind": kind})
-        if kind == "cancel":
+        cancel_ok = _result_ok(result)
+        await _audit(AuditEvent.CANCEL_RESULT, user_id, account_id, {"kind": kind, "ok": cancel_ok})
+        if not cancel_ok:
+            await respond("bot.order.failed")
+        elif kind == "cancel":
             await respond("bot.order.cancelled", order_id=intent.get("order_id", ""))
         else:
             count = len(result.get("canceled", [])) if isinstance(result, dict) else 0

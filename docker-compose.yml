@@ -23,7 +23,10 @@ services:
 
   migrate:
     build: .
-    command: sh -c "alembic upgrade head || python -m db.bootstrap"
+    # No Alembic versions are committed yet, so bootstrap creates the schema
+    # (create_all) + the first admin. Once you generate migrations on Postgres
+    # (alembic revision --autogenerate), switch this to: alembic upgrade head
+    command: python -m db.bootstrap
     env_file: .env
     depends_on:
       postgres:

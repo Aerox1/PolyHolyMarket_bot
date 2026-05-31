@@ -8,7 +8,7 @@ the DB stores ciphertext (see ``db.repositories.accounts``).
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable
 
 
@@ -19,15 +19,18 @@ class PolymarketCreds:
     - ``private_key is None`` → read-only client (Data API + public CLOB/Gamma),
       usable for positions/portfolio/market data with just the wallet address.
     - ``private_key`` set → signing client (L1+), can place/cancel orders.
+
+    Secret fields are ``repr=False`` so an accidental ``repr(creds)`` /
+    ``f"{creds}"`` / ``logger.debug(creds)`` can never leak the key.
     """
 
     wallet_address: str
     signature_type: int = 0            # 0=EOA, 1=POLY_PROXY, 2=GNOSIS_SAFE
-    private_key: str | None = None
+    private_key: str | None = field(default=None, repr=False)
     funder_address: str | None = None
     api_key: str | None = None
-    api_secret: str | None = None
-    api_passphrase: str | None = None
+    api_secret: str | None = field(default=None, repr=False)
+    api_passphrase: str | None = field(default=None, repr=False)
 
     @property
     def has_private_key(self) -> bool:

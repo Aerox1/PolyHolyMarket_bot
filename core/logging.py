@@ -37,6 +37,9 @@ def setup_logging(level: str | None = None) -> None:
     )
     root = logging.getLogger()
     redactor = RedactSecretsFilter()
+    # Attach to the root logger AND its current handlers, so records are scrubbed
+    # regardless of which handler (incl. ones added later) emits them.
+    root.addFilter(redactor)
     for handler in root.handlers:
         handler.addFilter(redactor)
     # Quiet noisy third-party loggers.
