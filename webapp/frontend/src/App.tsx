@@ -306,7 +306,7 @@ export default function App() {
             onClose={closeBet}
           />
         ) : showPortfolio ? (
-          <PortfolioSheet key="portfolio" onClose={closePortfolio} />
+          <PortfolioSheet key="portfolio" me={me} onClose={closePortfolio} />
         ) : showLeaderboard ? (
           <LeaderboardSheet key="leaderboard" onClose={closeLeaderboard} />
         ) : null}

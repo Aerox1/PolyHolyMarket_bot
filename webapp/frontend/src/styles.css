@@ -472,6 +472,42 @@ body {
   font-weight: 800;
   margin-top: 2px;
 }
+.stat-strip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.stat-cell {
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 10px 8px;
+  text-align: center;
+  min-width: 0;
+}
+.stat-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--hint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.stat-value {
+  font-size: 15px;
+  font-weight: 800;
+  margin-top: 3px;
+  white-space: nowrap;
+}
+.stat-value.pos {
+  color: var(--yes);
+}
+.stat-value.neg {
+  color: var(--no);
+}
 .position-list {
   display: flex;
   flex-direction: column;
@@ -592,19 +628,33 @@ body {
   width: 36px;
   flex-shrink: 0;
 }
-.lb-name {
+.lb-name-col {
   flex: 1;
   min-width: 0;
+}
+.lb-name {
   font-size: 14px;
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.lb-sub {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--hint);
+  margin-top: 2px;
+}
 .lb-value {
   font-size: 14px;
   font-weight: 700;
   flex-shrink: 0;
+}
+.lb-value.pos {
+  color: var(--yes);
+}
+.lb-value.neg {
+  color: var(--no);
 }
 .lb-streak {
   font-size: 13px;

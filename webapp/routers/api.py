@@ -18,6 +18,7 @@ from core import audit
 from core.audit import AuditEvent
 from db.models import User
 from db.repositories import accounts as accounts_repo
+from db.repositories import bets as bets_repo
 from db.repositories import categories as categories_repo
 from db.repositories import orders as orders_repo
 from db.repositories import stats as stats_repo
@@ -89,7 +90,7 @@ async def portfolio(request: Request, user: User = Depends(current_user)) -> dic
 @router.get("/leaderboard")
 async def leaderboard(metric: str = "bets", user: User = Depends(current_user),
                       db: AsyncSession = Depends(get_db)) -> dict:
-    metric = metric if metric in ("bets", "volume") else "bets"
+    metric = metric if metric in stats_repo.METRICS else "bets"
     rows = await stats_repo.leaderboard(db, metric=metric, limit=20)
     return {"metric": metric, "rows": rows, "me": await stats_repo.get_stats(db, user.id)}
 
@@ -193,10 +194,16 @@ async def place_bet(
                                     title=m.get("question"), error=None if ok else "rejected")
     if not ok:
         raise HTTPException(status_code=502, detail="order_rejected")
-    # Gamification: count the bet toward streak + totals.
+    # Gamification: count the bet toward streak + totals, and record a settleable bet.
     try:
         await stats_repo.record_bet(db, user.id, amount)
-    except Exception as exc:  # noqa: BLE001 — stats must never block a trade result
-        logger.warning("record_bet failed: %s", type(exc).__name__)
+        await bets_repo.create_bet(
+            db, user_id=user.id, account_id=account_id, market_id=market_id, token_id=token,
+            question=m.get("question"), outcome=outcome,
+            amount_usd=amount, entry_price=(m.get("yes_price") if outcome == "yes" else m.get("no_price")),
+            source="miniapp", clob_order_id=order_id,
+        )
+    except Exception as exc:  # noqa: BLE001 — stats/bet recording must never block a trade result
+        logger.warning("record_bet/create_bet failed: %s", type(exc).__name__)
     return {"ok": True, "order_id": order_id, "outcome": outcome, "amount": amount,
             "question": m.get("question")}

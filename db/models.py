@@ -324,9 +324,44 @@ class GeminiUsage(Base):
     __table_args__ = (Index("ix_gemini_usage_ts", "ts"),)
 
 
+class BetStatus(str, enum.Enum):
+    OPEN = "OPEN"
+    WON = "WON"
+    LOST = "LOST"
+    VOID = "VOID"
+
+
+class Bet(Base):
+    """A settleable prediction (primarily Mini App bets). The settlement engine
+    resolves OPEN bets when their market resolves on Polymarket."""
+
+    __tablename__ = "bets"
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    account_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("accounts.id", ondelete="SET NULL"))
+    market_id: Mapped[str] = mapped_column(String(128), nullable=False)   # conditionId
+    token_id: Mapped[str] = mapped_column(String(128), nullable=False)    # outcome token bought
+    question: Mapped[str | None] = mapped_column(Text)
+    outcome: Mapped[str] = mapped_column(String(8), nullable=False)       # YES|NO
+    amount_usd: Mapped[float] = mapped_column(Numeric(20, 6), nullable=False)
+    entry_price: Mapped[float | None] = mapped_column(Numeric(10, 6))     # implied prob of chosen outcome
+    shares: Mapped[float | None] = mapped_column(Numeric(20, 6))
+    status: Mapped[str] = mapped_column(String(8), default=BetStatus.OPEN.value, nullable=False, index=True)
+    payout_usd: Mapped[float] = mapped_column(Numeric(20, 6), default=0, nullable=False)
+    pnl_usd: Mapped[float] = mapped_column(Numeric(20, 6), default=0, nullable=False)
+    brier: Mapped[float | None] = mapped_column(Numeric(10, 6))
+    source: Mapped[str] = mapped_column(String(8), default="miniapp", nullable=False)
+    clob_order_id: Mapped[str | None] = mapped_column(String(128))
+    created_at: Mapped[datetime] = _now()
+    settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (Index("ix_bets_status_market", "status", "market_id"),)
+
+
 class UserStats(Base):
     """Gamification stats derived from real betting activity (daily streak +
-    totals). Updated on every successful bet from the bot or the Mini App."""
+    totals + settled results). Updated on bet placement and settlement."""
 
     __tablename__ = "user_stats"
 
@@ -336,6 +371,12 @@ class UserStats(Base):
     last_active_date: Mapped[str | None] = mapped_column(String(10))  # 'YYYY-MM-DD' (UTC)
     total_bets: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     total_volume_usd: Mapped[float] = mapped_column(Numeric(20, 2), default=0, nullable=False)
+    # ── settled results (from the settlement engine) ──
+    wins: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    losses: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    settled_bets: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    realized_pnl_usd: Mapped[float] = mapped_column(Numeric(20, 6), default=0, nullable=False)
+    brier_sum: Mapped[float] = mapped_column(Numeric(20, 6), default=0, nullable=False)  # avg = brier_sum/settled_bets
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )

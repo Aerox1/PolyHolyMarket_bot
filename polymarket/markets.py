@@ -154,3 +154,46 @@ def get_market(condition_id: str) -> dict | None:
             return None
         rows = _as_list(r.json())
     return _normalize_market(rows[0]) if rows else None
+
+
+def market_resolution(condition_id: str) -> dict:
+    """Resolution status of a market.
+
+    Returns {"resolved": bool, "winning_token": str|None, "void": bool}. A market
+    is resolved when closed + umaResolutionStatus=='resolved' with exactly one
+    outcomePrice >= 0.99. 'void' flags a closed-but-no-clear-winner case (50/50,
+    cancelled, or ambiguous multi-winner data) so we refund.
+    """
+    with _client() as c:
+        try:
+            r = c.get("/markets", params={"condition_ids": condition_id, "limit": 1})
+            r.raise_for_status()
+            rows = _as_list(r.json())
+        except Exception:  # noqa: BLE001 — treat upstream errors as "not yet resolved"
+            return {"resolved": False, "winning_token": None, "void": False}
+    return parse_resolution(rows[0]) if rows else {"resolved": False, "winning_token": None, "void": False}
+
+
+def parse_resolution(m: dict) -> dict:
+    """Pure: derive {resolved, winning_token, void} from a Gamma market dict."""
+    closed = bool(m.get("closed"))
+    uma = (m.get("umaResolutionStatus") or "").lower()
+    if not (closed and uma == "resolved"):
+        return {"resolved": False, "winning_token": None, "void": False}
+
+    prices = _jsarr(m.get("outcomePrices"))
+    tokens = _jsarr(m.get("clobTokenIds"))
+    # A definitive resolution has EXACTLY ONE outcome at ~$1. Two legs >= 0.99
+    # (an upstream data glitch on a resolved market) is ambiguous, not a win:
+    # refund rather than arbitrarily pay the first leg.
+    winners = []
+    for i, p in enumerate(prices):
+        try:
+            if float(p) >= 0.99:
+                winners.append(i)
+        except (TypeError, ValueError):
+            continue
+    if len(winners) != 1 or winners[0] >= len(tokens):
+        # closed/resolved but no clear single winner → void (refund)
+        return {"resolved": True, "winning_token": None, "void": True}
+    return {"resolved": True, "winning_token": str(tokens[winners[0]]), "void": False}

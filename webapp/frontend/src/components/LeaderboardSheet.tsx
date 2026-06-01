@@ -5,7 +5,7 @@ import {
   type Leaderboard,
   type LeaderboardMetric,
 } from "../api";
-import { usdCents } from "../format";
+import { usdCents, usdSigned, winRatePercent } from "../format";
 import { haptic } from "../telegram";
 import { Sheet } from "./Sheet";
 
@@ -63,6 +63,12 @@ export function LeaderboardSheet({ onClose }: { onClose: () => void }) {
         >
           Volume
         </button>
+        <button
+          className={`lb-toggle-btn${metric === "pnl" ? " active" : ""}`}
+          onClick={() => pick("pnl")}
+        >
+          P&amp;L
+        </button>
       </div>
 
       {state.status === "loading" ? (
@@ -86,14 +92,32 @@ export function LeaderboardSheet({ onClose }: { onClose: () => void }) {
           <div className="lb-list">
             {data.rows.map((r) => {
               const mine = r.name === meName;
-              const value =
-                metric === "bets" ? `${r.bets} bets` : usdCents(r.volume_usd);
+              const isPnl = metric === "pnl";
+              const value = isPnl
+                ? usdSigned(r.pnl_usd)
+                : metric === "bets"
+                  ? `${r.bets} bets`
+                  : metric === "wins"
+                    ? `${r.wins} wins`
+                    : usdCents(r.volume_usd);
+              const valueClass = isPnl
+                ? r.pnl_usd < 0
+                  ? " neg"
+                  : " pos"
+                : "";
+              const sub =
+                r.win_rate != null
+                  ? `${winRatePercent(r.win_rate)} · 🔥${r.streak}`
+                  : null;
               return (
                 <div className={`lb-row${mine ? " mine" : ""}`} key={r.rank}>
                   <div className="lb-rank">#{r.rank}</div>
-                  <div className="lb-name">{r.name}</div>
-                  <div className="lb-value">{value}</div>
-                  <div className="lb-streak">🔥 {r.streak}</div>
+                  <div className="lb-name-col">
+                    <div className="lb-name">{r.name}</div>
+                    {sub ? <div className="lb-sub">{sub}</div> : null}
+                  </div>
+                  <div className={`lb-value${valueClass}`}>{value}</div>
+                  {sub ? null : <div className="lb-streak">🔥 {r.streak}</div>}
                 </div>
               );
             })}
@@ -103,6 +127,12 @@ export function LeaderboardSheet({ onClose }: { onClose: () => void }) {
             <div className="lb-footer">
               You: #{data.me.rank_bets} · {data.me.total_bets} bets · 🔥
               {data.me.current_streak}
+              {data.me.win_rate != null
+                ? ` · ${winRatePercent(data.me.win_rate)} win`
+                : ""}
+              {data.me.settled_bets > 0
+                ? ` · ${usdSigned(data.me.realized_pnl_usd)}`
+                : ""}
             </div>
           )}
         </>

@@ -140,6 +140,11 @@
       "category_line": "*{n}.* {title} — {vol} vol",
       "trade_hint": "_Tap a token id to copy, then /marketbuy <token> <usd> or /buy._",
       "none": "No markets available right now. Try again shortly."
+    },
+    "settle": {
+      "won": "🎉 *Your bet won!*\n{outcome} on “{q}”\nPayout ${payout}  ·  P&L +${pnl}",
+      "lost": "❌ *Bet settled*\n{outcome} on “{q}” — lost ${amount}.",
+      "void": "↩️ *Bet refunded*\nYour ${amount} on “{q}” was returned (market voided)."
     }
   },
   "dash": {

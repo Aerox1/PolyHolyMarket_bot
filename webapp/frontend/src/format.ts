@@ -44,6 +44,12 @@ export function usdSigned(n: number | null | undefined): string {
   return `${sign}${usdCents(Math.abs(n))}`;
 }
 
+// Win-rate is delivered as a 0..100 number (or null). 63.2 -> "63%", null -> "—".
+export function winRatePercent(n: number | null | undefined): string {
+  if (n == null || Number.isNaN(n)) return "—";
+  return `${Math.round(n)}%`;
+}
+
 // True only when price is a usable probability strictly inside (0, 1).
 export function isValidPrice(p: number | null | undefined): p is number {
   return typeof p === "number" && !Number.isNaN(p) && p > 0 && p < 1;

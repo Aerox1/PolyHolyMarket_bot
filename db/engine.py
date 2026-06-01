@@ -32,6 +32,7 @@ def _sqlite_pragmas(dbapi_conn, _record) -> None:
         cur.execute("PRAGMA journal_mode=WAL")
     cur.execute("PRAGMA busy_timeout=5000")
     cur.execute("PRAGMA synchronous=NORMAL")
+    cur.execute("PRAGMA foreign_keys=ON")  # enforce FKs/CASCADE like Postgres
     cur.close()
 
 

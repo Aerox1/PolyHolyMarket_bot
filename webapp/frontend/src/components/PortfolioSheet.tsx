@@ -1,8 +1,39 @@
 import { useEffect, useState } from "react";
-import { api, ApiError, type Portfolio } from "../api";
-import { usdCents, usdSigned } from "../format";
+import { api, ApiError, type Me, type Portfolio } from "../api";
+import { usdCents, usdSigned, winRatePercent } from "../format";
 import { closeApp } from "../telegram";
 import { Sheet } from "./Sheet";
+
+// Compact stat strip shown in the Portfolio header: realized P&L, win rate,
+// record (W-L), and current streak. Only rendered once a settled bet exists.
+function StatStrip({ me }: { me: Me }) {
+  const s = me.stats;
+  if (!s || s.settled_bets <= 0) return null;
+  return (
+    <div className="stat-strip">
+      <div className="stat-cell">
+        <div className="stat-label">Realized P&amp;L</div>
+        <div className={`stat-value ${s.realized_pnl_usd < 0 ? "neg" : "pos"}`}>
+          {usdSigned(s.realized_pnl_usd)}
+        </div>
+      </div>
+      <div className="stat-cell">
+        <div className="stat-label">Win rate</div>
+        <div className="stat-value">{winRatePercent(s.win_rate)}</div>
+      </div>
+      <div className="stat-cell">
+        <div className="stat-label">Record</div>
+        <div className="stat-value">
+          {s.wins}-{s.losses}
+        </div>
+      </div>
+      <div className="stat-cell">
+        <div className="stat-label">Streak</div>
+        <div className="stat-value">🔥 {s.current_streak}</div>
+      </div>
+    </div>
+  );
+}
 
 type State =
   | { status: "loading" }
@@ -10,7 +41,13 @@ type State =
   | { status: "no_account" }
   | { status: "error" };
 
-export function PortfolioSheet({ onClose }: { onClose: () => void }) {
+export function PortfolioSheet({
+  me,
+  onClose,
+}: {
+  me: Me | null;
+  onClose: () => void;
+}) {
   const [state, setState] = useState<State>({ status: "loading" });
 
   useEffect(() => {
@@ -80,6 +117,8 @@ export function PortfolioSheet({ onClose }: { onClose: () => void }) {
         <div className="balance-label">USDC Balance</div>
         <div className="balance-value">{usdCents(balance)}</div>
       </div>
+
+      {me ? <StatStrip me={me} /> : null}
 
       {positions.length === 0 ? (
         <div className="sheet-center">

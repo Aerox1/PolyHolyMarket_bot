@@ -7,6 +7,12 @@ export interface Stats {
   total_bets: number;
   total_volume_usd: number;
   rank_bets: number;
+  wins: number;
+  losses: number;
+  settled_bets: number;
+  realized_pnl_usd: number;
+  win_rate: number | null;
+  avg_brier: number | null;
 }
 
 export interface Me {
@@ -30,7 +36,7 @@ export interface Portfolio {
   positions: Position[];
 }
 
-export type LeaderboardMetric = "bets" | "volume";
+export type LeaderboardMetric = "bets" | "volume" | "pnl" | "wins";
 
 export interface LeaderboardRow {
   rank: number;
@@ -38,6 +44,10 @@ export interface LeaderboardRow {
   bets: number;
   volume_usd: number;
   streak: number;
+  pnl_usd: number;
+  wins: number;
+  win_rate: number | null;
+  avg_brier: number | null;
 }
 
 export interface Leaderboard {

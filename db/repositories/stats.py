@@ -13,7 +13,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models import User, UserStats
 
-METRICS = {"bets": UserStats.total_bets, "volume": UserStats.total_volume_usd}
+METRICS = {
+    "bets": UserStats.total_bets,
+    "volume": UserStats.total_volume_usd,
+    "pnl": UserStats.realized_pnl_usd,
+    "wins": UserStats.wins,
+}
 
 
 def _today() -> str:
@@ -47,11 +52,39 @@ async def record_bet(session: AsyncSession, user_id: int, amount_usd: float) -> 
     return stats
 
 
+async def record_settlement(session: AsyncSession, user_id: int, *, status: str,
+                            pnl: float, brier: float | None) -> None:
+    """Fold a settled bet into the user's lifetime stats. VOID bets don't count
+    toward wins/losses/accuracy (only OPEN→WON/LOST do)."""
+    stats = await session.get(UserStats, user_id)
+    if stats is None:
+        stats = UserStats(user_id=user_id)
+        session.add(stats)
+        await session.flush()
+    if status == "WON":
+        stats.wins = (stats.wins or 0) + 1
+    elif status == "LOST":
+        stats.losses = (stats.losses or 0) + 1
+    if status in ("WON", "LOST"):
+        stats.settled_bets = (stats.settled_bets or 0) + 1
+        stats.realized_pnl_usd = float(stats.realized_pnl_usd or 0) + float(pnl or 0)
+        if brier is not None:
+            stats.brier_sum = float(stats.brier_sum or 0) + float(brier)
+
+
+def _accuracy(stats: UserStats) -> dict:
+    settled = stats.settled_bets or 0
+    win_rate = round(100.0 * (stats.wins or 0) / settled, 1) if settled else None
+    avg_brier = round(float(stats.brier_sum or 0) / settled, 4) if settled else None
+    return {"win_rate": win_rate, "avg_brier": avg_brier}
+
+
 async def get_stats(session: AsyncSession, user_id: int) -> dict:
     stats = await session.get(UserStats, user_id)
     if stats is None:
-        return {"current_streak": 0, "longest_streak": 0, "total_bets": 0, "total_volume_usd": 0.0, "rank_bets": None}
-    # rank by total_bets (1 = most)
+        return {"current_streak": 0, "longest_streak": 0, "total_bets": 0, "total_volume_usd": 0.0,
+                "rank_bets": None, "wins": 0, "losses": 0, "settled_bets": 0,
+                "realized_pnl_usd": 0.0, "win_rate": None, "avg_brier": None}
     higher = await session.scalar(
         select(func.count()).select_from(UserStats).where(UserStats.total_bets > stats.total_bets)
     )
@@ -61,6 +94,11 @@ async def get_stats(session: AsyncSession, user_id: int) -> dict:
         "total_bets": stats.total_bets,
         "total_volume_usd": float(stats.total_volume_usd or 0),
         "rank_bets": int(higher or 0) + 1,
+        "wins": stats.wins or 0,
+        "losses": stats.losses or 0,
+        "settled_bets": stats.settled_bets or 0,
+        "realized_pnl_usd": float(stats.realized_pnl_usd or 0),
+        **_accuracy(stats),
     }
 
 
@@ -82,5 +120,8 @@ async def leaderboard(session: AsyncSession, metric: str = "bets", limit: int = 
             "bets": stats.total_bets,
             "volume_usd": float(stats.total_volume_usd or 0),
             "streak": stats.current_streak,
+            "pnl_usd": float(stats.realized_pnl_usd or 0),
+            "wins": stats.wins or 0,
+            **_accuracy(stats),
         })
     return out
