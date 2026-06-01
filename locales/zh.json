@@ -67,7 +67,8 @@
       "no_trades": "暂无成交。",
       "activity_header": "🕑 *近期动态：*",
       "position_value": "价值",
-      "no_activity": "暂无近期动态。"
+      "no_activity": "暂无近期动态。",
+      "showing": "_显示 {n} / {total}。_"
     },
     "market": {
       "search_usage": "用法：/search <query>",

@@ -17,8 +17,8 @@ import asyncio
 import logging
 from datetime import datetime, timezone
 
-from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes
 
 from bot.handlers import common
 from polymarket.credentials import NoAccountConnected, TradingUnavailable
@@ -89,16 +89,86 @@ def _as_rows(data) -> list[dict]:
     return data if isinstance(data, list) else []
 
 
+# ── navigation + presentation helpers (Step 3) ───────────────────────────────
+
+# Cross-link row shown under every monitoring screen so users hop without typing.
+_XLINKS = [("📊", "portfolio"), ("📈", "positions"), ("📋", "orders"), ("🧾", "trades"), ("🕑", "activity")]
+
+
+def _nav(context: ContextTypes.DEFAULT_TYPE, current: str) -> InlineKeyboardMarkup:
+    """[cross-links] + [↻ Refresh current] [🏠 Dashboard]."""
+    xrow = [InlineKeyboardButton(emoji, callback_data=f"inq:{c}") for emoji, c in _XLINKS]
+    bottom = [InlineKeyboardButton(common.tr(context, "bot.tile.refresh"), callback_data=f"inq:{current}"),
+              common.dashboard_button(context)]
+    return InlineKeyboardMarkup([xrow, bottom])
+
+
+def _connect_kb(context: ContextTypes.DEFAULT_TYPE) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton(common.tr(context, "bot.menu.connect"), callback_data="menu:connect"),
+        common.dashboard_button(context),
+    ]])
+
+
+def _empty_kb(context: ContextTypes.DEFAULT_TYPE) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton(common.tr(context, "bot.tile.trending"), callback_data="menu:trending"),
+        common.dashboard_button(context),
+    ]])
+
+
+def _hhead(context: ContextTypes.DEFAULT_TYPE, key: str) -> str:
+    """Render a (trusted) Markdown header from the catalog as an HTML <b> heading."""
+    raw = common.tr(context, key).replace("*", "").replace("`", "")
+    return f"<b>{common.esc(raw)}</b>"
+
+
+_ACT_EMOJI = {"TRADE": "🔁", "BUY": "🟢", "SELL": "🔴", "REDEEM": "🪙", "REWARD": "🎁",
+              "SPLIT": "✂️", "MERGE": "🔗", "CONVERSION": "🔄", "CONVERT": "🔄"}
+
+
+def _act_emoji(atype) -> str:
+    return _ACT_EMOJI.get(str(atype).upper(), "•")
+
+
+def _rel_ts(ts) -> str:
+    """Relative timestamp ('3h ago'), falling back to an absolute date."""
+    n = _as_float(ts)
+    if n <= 0:
+        return "?"
+    if n > 1e12:  # milliseconds
+        n /= 1000.0
+    try:
+        dt = datetime.fromtimestamp(n, tz=timezone.utc)
+    except (OverflowError, OSError, ValueError):
+        return "?"
+    secs = (datetime.now(timezone.utc) - dt).total_seconds()
+    if secs < 60:
+        return "just now"
+    if secs < 3600:
+        return f"{int(secs // 60)}m ago"
+    if secs < 86400:
+        return f"{int(secs // 3600)}h ago"
+    if secs < 7 * 86400:
+        return f"{int(secs // 86400)}d ago"
+    return dt.strftime("%Y-%m-%d")
+
+
+async def _no_account(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await common.reply(update, context, "bot.error.no_account", reply_markup=_connect_kb(context))
+
+
 # ── /portfolio ───────────────────────────────────────────────────────────────
 
 async def portfolio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = common.db_user_id(context)
+    await common.typing(update, context)
     try:
         pm = await common.manager(context).get_readonly_client(user_id)
         value = await asyncio.to_thread(pm.get_portfolio_value)
         positions = await asyncio.to_thread(pm.get_positions, _MAX_ROWS, 0)
     except NoAccountConnected:
-        await common.reply(update, context, "bot.error.no_account")
+        await _no_account(update, context)
         return
     except TradingUnavailable:
         await common.reply(update, context, "bot.error.trading_unavailable")
@@ -134,25 +204,28 @@ async def portfolio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     pnl_pct = _as_float(value.get("pnlPercent") or value.get("percentPnl") if isinstance(value, dict) else 0.0)
 
-    await common.reply(
-        update, context, "bot.inquiry.portfolio",
+    text = common.tr(
+        context, "bot.inquiry.portfolio",
         cash=_fmt_money(cash),
         positions_value=_fmt_money(positions_value),
         total=_fmt_money(total),
         pnl=f"{_pnl_emoji(pnl)} ${_fmt_money(pnl)}",
-        pnl_pct=f"{pnl_pct:.1f}",
+        pnl_pct=f"{pnl_pct:+.1f}",
     )
+    await common.screen(update, context, text=text, parse_mode="Markdown",
+                        reply_markup=_nav(context, "portfolio"))
 
 
 # ── /positions ───────────────────────────────────────────────────────────────
 
 async def positions(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = common.db_user_id(context)
+    await common.typing(update, context)
     try:
         pm = await common.manager(context).get_readonly_client(user_id)
         data = await asyncio.to_thread(pm.get_positions, _MAX_ROWS, 0)
     except NoAccountConnected:
-        await common.reply(update, context, "bot.error.no_account")
+        await _no_account(update, context)
         return
     except TradingUnavailable:
         await common.reply(update, context, "bot.error.trading_unavailable")
@@ -164,25 +237,26 @@ async def positions(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     rows = _as_rows(data)
     if not rows:
-        await common.reply(update, context, "bot.inquiry.no_positions")
+        await common.reply(update, context, "bot.inquiry.no_positions", reply_markup=_empty_kb(context))
         return
 
-    lines = [common.tr(context, "bot.inquiry.positions_header"), ""]
+    value_label = common.esc(common.tr(context, "bot.inquiry.position_value"))
+    lines = [_hhead(context, "bot.inquiry.positions_header"), ""]
     for p in rows[:_MAX_ROWS]:
-        title = p.get("title") or p.get("question") or "?"
-        outcome = p.get("outcome", "")
+        title = common.esc(p.get("title") or p.get("question") or "?")
+        outcome = common.esc(p.get("outcome", ""))
         size = _fmt_money(p.get("size"))
         avg = _fmt_price(p.get("avgPrice"))
         cur_value = _fmt_money(p.get("currentValue"))
         cash_pnl = p.get("cashPnl", 0)
         pct_pnl = _as_float(p.get("percentPnl"))
         lines.append(
-            f"• *{title}*\n"
+            f"• <b>{title}</b>\n"
             f"  {outcome} | {size} @ ${avg}\n"
-            f"  {common.tr(context, 'bot.inquiry.position_value')}: ${cur_value} | "
-            f"{_pnl_emoji(cash_pnl)} ${_fmt_money(cash_pnl)} ({pct_pnl:.1f}%)"
+            f"  {value_label}: ${cur_value} | "
+            f"{_pnl_emoji(cash_pnl)} ${_fmt_money(cash_pnl)} ({pct_pnl:+.1f}%)"
         )
-    await _send(update, "\n".join(lines))
+    await common.screen(update, context, text="\n".join(lines), reply_markup=_nav(context, "positions"))
 
 
 # ── /balance ─────────────────────────────────────────────────────────────────
@@ -195,11 +269,12 @@ def _parse_atomic_usdc(raw) -> float:
 
 async def balance(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = common.db_user_id(context)
+    await common.typing(update, context)
     try:
         pm = await common.manager(context).get_trading_client(user_id)
         data = await asyncio.to_thread(pm.get_balance)
     except NoAccountConnected:
-        await common.reply(update, context, "bot.error.no_account")
+        await _no_account(update, context)
         return
     except TradingUnavailable:
         await common.reply(update, context, "bot.error.trading_unavailable")
@@ -210,18 +285,21 @@ async def balance(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     raw = data.get("balance", data) if isinstance(data, dict) else data
-    await common.reply(update, context, "bot.inquiry.balance", balance=_fmt_money(_parse_atomic_usdc(raw)))
+    text = common.tr(context, "bot.inquiry.balance", balance=_fmt_money(_parse_atomic_usdc(raw)))
+    await common.screen(update, context, text=text, parse_mode="Markdown",
+                        reply_markup=_nav(context, "balance"))
 
 
 # ── /orders ──────────────────────────────────────────────────────────────────
 
 async def orders(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = common.db_user_id(context)
+    await common.typing(update, context)
     try:
         pm = await common.manager(context).get_trading_client(user_id)
         data = await asyncio.to_thread(pm.get_open_orders)
     except NoAccountConnected:
-        await common.reply(update, context, "bot.error.no_account")
+        await _no_account(update, context)
         return
     except TradingUnavailable:
         await common.reply(update, context, "bot.error.trading_unavailable")
@@ -233,33 +311,38 @@ async def orders(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     rows = data if isinstance(data, list) else _as_rows(data)
     if not rows:
-        await common.reply(update, context, "bot.inquiry.no_orders")
+        await common.reply(update, context, "bot.inquiry.no_orders", reply_markup=_empty_kb(context))
         return
 
-    lines = [common.tr(context, "bot.inquiry.orders_header"), ""]
+    lines = [_hhead(context, "bot.inquiry.orders_header"), ""]
     for o in rows[:_MAX_ROWS]:
         oid = str(o.get("id", "?"))
         side = str(o.get("side", "?")).upper()
         price = _fmt_price(o.get("price"))
         size = _fmt_money(o.get("original_size") or o.get("size"))
         token = o.get("asset_id") or o.get("market") or "?"
+        emoji = "🟩" if side == "BUY" else "🟥"
         lines.append(
-            f"{_pnl_emoji(0 if side == 'BUY' else -1)} `{_shorten(oid, 12)}`\n"
-            f"  {side} | ${price} × {size}\n"
-            f"  `{_shorten(token)}`"
+            f"{emoji} <code>{common.esc(_shorten(oid, 12))}</code>\n"
+            f"  {common.esc(side)} | ${price} × {size}\n"
+            f"  <code>{common.esc(_shorten(token))}</code>"
         )
-    await _send(update, "\n".join(lines))
+    if len(rows) > _MAX_ROWS:
+        note = common.tr(context, "bot.inquiry.showing", n=_MAX_ROWS, total=len(rows)).replace("_", "")
+        lines += ["", f"<i>{common.esc(note)}</i>"]
+    await common.screen(update, context, text="\n".join(lines), reply_markup=_nav(context, "orders"))
 
 
 # ── /trades ──────────────────────────────────────────────────────────────────
 
 async def trades(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = common.db_user_id(context)
+    await common.typing(update, context)
     try:
         pm = await common.manager(context).get_readonly_client(user_id)
         data = await asyncio.to_thread(pm.get_trades, _MAX_ROWS, 0)
     except NoAccountConnected:
-        await common.reply(update, context, "bot.error.no_account")
+        await _no_account(update, context)
         return
     except TradingUnavailable:
         await common.reply(update, context, "bot.error.trading_unavailable")
@@ -271,35 +354,36 @@ async def trades(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     rows = _as_rows(data)
     if not rows:
-        await common.reply(update, context, "bot.inquiry.no_trades")
+        await common.reply(update, context, "bot.inquiry.no_trades", reply_markup=_empty_kb(context))
         return
 
-    lines = [common.tr(context, "bot.inquiry.trades_header"), ""]
+    lines = [_hhead(context, "bot.inquiry.trades_header"), ""]
     for tr_row in rows[:_MAX_ROWS]:
-        title = tr_row.get("title") or tr_row.get("question") or "?"
+        title = common.esc(tr_row.get("title") or tr_row.get("question") or "?")
         side = str(tr_row.get("side", "?")).upper()
-        outcome = tr_row.get("outcome", "")
+        outcome = common.esc(tr_row.get("outcome", ""))
         price = _as_float(tr_row.get("price"))
         size = _as_float(tr_row.get("size"))
         emoji = "🟢" if side == "BUY" else "🔴"
-        when = _fmt_ts(tr_row.get("timestamp") or tr_row.get("matchTime"))
+        when = _rel_ts(tr_row.get("timestamp") or tr_row.get("matchTime"))
         lines.append(
-            f"{emoji} *{side}* {outcome} — {title}\n"
+            f"{emoji} <b>{common.esc(side)}</b> {outcome} — {title}\n"
             f"  ${price:.4f} × {size:,.2f} = ${price * size:,.2f}\n"
             f"  {when}"
         )
-    await _send(update, "\n".join(lines))
+    await common.screen(update, context, text="\n".join(lines), reply_markup=_nav(context, "trades"))
 
 
 # ── /activity ────────────────────────────────────────────────────────────────
 
 async def activity(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = common.db_user_id(context)
+    await common.typing(update, context)
     try:
         pm = await common.manager(context).get_readonly_client(user_id)
         data = await asyncio.to_thread(pm.get_activity, _MAX_ROWS)
     except NoAccountConnected:
-        await common.reply(update, context, "bot.error.no_account")
+        await _no_account(update, context)
         return
     except TradingUnavailable:
         await common.reply(update, context, "bot.error.trading_unavailable")
@@ -311,17 +395,17 @@ async def activity(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     rows = _as_rows(data)
     if not rows:
-        await common.reply(update, context, "bot.inquiry.no_activity")
+        await common.reply(update, context, "bot.inquiry.no_activity", reply_markup=_empty_kb(context))
         return
 
-    lines = [common.tr(context, "bot.inquiry.activity_header"), ""]
+    lines = [_hhead(context, "bot.inquiry.activity_header"), ""]
     for a in rows[:_MAX_ROWS]:
         atype = a.get("type", "?")
-        title = a.get("title") or a.get("question") or ""
+        title = common.esc(a.get("title") or a.get("question") or "")
         amount = _fmt_money(a.get("usdcSize") or a.get("amount"))
-        when = _fmt_ts(a.get("timestamp") or a.get("createdAt"))
-        lines.append(f"• {atype} — {title}\n  ${amount} | {when}")
-    await _send(update, "\n".join(lines))
+        when = _rel_ts(a.get("timestamp") or a.get("createdAt"))
+        lines.append(f"{_act_emoji(atype)} <b>{common.esc(str(atype))}</b> — {title}\n  ${amount} | {when}")
+    await common.screen(update, context, text="\n".join(lines), reply_markup=_nav(context, "activity"))
 
 
 # ── /search <query> ──────────────────────────────────────────────────────────
@@ -332,11 +416,12 @@ async def search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
     query = " ".join(context.args)
     user_id = common.db_user_id(context)
+    await common.typing(update, context)
     try:
         pm = await common.manager(context).get_readonly_client(user_id)
         results = await asyncio.to_thread(pm.search_markets, query, 10)
     except NoAccountConnected:
-        await common.reply(update, context, "bot.error.no_account")
+        await _no_account(update, context)
         return
     except TradingUnavailable:
         await common.reply(update, context, "bot.error.trading_unavailable")
@@ -367,11 +452,12 @@ async def market(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
     condition_id = context.args[0]
     user_id = common.db_user_id(context)
+    await common.typing(update, context)
     try:
         pm = await common.manager(context).get_readonly_client(user_id)
         data = await asyncio.to_thread(pm.get_market, condition_id)
     except NoAccountConnected:
-        await common.reply(update, context, "bot.error.no_account")
+        await _no_account(update, context)
         return
     except TradingUnavailable:
         await common.reply(update, context, "bot.error.trading_unavailable")
@@ -416,6 +502,7 @@ async def price(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
     token_id = context.args[0]
     user_id = common.db_user_id(context)
+    await common.typing(update, context)
     try:
         pm = await common.manager(context).get_readonly_client(user_id)
         buy = await asyncio.to_thread(pm.get_price, token_id, "buy")
@@ -423,7 +510,7 @@ async def price(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         mid = await asyncio.to_thread(pm.get_midpoint, token_id)
         spread = await asyncio.to_thread(pm.get_spread, token_id)
     except NoAccountConnected:
-        await common.reply(update, context, "bot.error.no_account")
+        await _no_account(update, context)
         return
     except TradingUnavailable:
         await common.reply(update, context, "bot.error.trading_unavailable")
@@ -454,11 +541,12 @@ async def book(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
     token_id = context.args[0]
     user_id = common.db_user_id(context)
+    await common.typing(update, context)
     try:
         pm = await common.manager(context).get_readonly_client(user_id)
         data = await asyncio.to_thread(pm.get_orderbook, token_id)
     except NoAccountConnected:
-        await common.reply(update, context, "bot.error.no_account")
+        await _no_account(update, context)
         return
     except TradingUnavailable:
         await common.reply(update, context, "bot.error.trading_unavailable")
@@ -485,10 +573,27 @@ async def book(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _send(update, "\n".join(lines))
 
 
+# ── refresh / cross-link callbacks (inq:<command>) ───────────────────────────
+
+async def on_inq(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Re-run a monitoring command from a [↻ Refresh] / cross-link button."""
+    query = update.callback_query
+    if query is None:
+        return
+    await query.answer()
+    action = (query.data or "").split(":", 1)[1] if ":" in (query.data or "") else ""
+    fn = {"portfolio": portfolio, "positions": positions, "balance": balance,
+          "orders": orders, "trades": trades, "activity": activity}.get(action)
+    if fn is not None:
+        await fn(update, context)
+
+
 # ── registration ─────────────────────────────────────────────────────────────
 
 def register(application: Application) -> None:
     """Add all read-only inquiry + market-data command handlers."""
+    application.add_handler(CallbackQueryHandler(
+        on_inq, pattern="^inq:(portfolio|positions|balance|orders|trades|activity)$"))
     application.add_handler(CommandHandler("portfolio", portfolio))
     application.add_handler(CommandHandler("positions", positions))
     application.add_handler(CommandHandler("balance", balance))

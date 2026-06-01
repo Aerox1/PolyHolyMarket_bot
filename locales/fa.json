@@ -67,7 +67,8 @@
       "no_trades": "هنوز معامله‌ای نیست.",
       "activity_header": "🕑 *فعالیت اخیر:*",
       "position_value": "ارزش",
-      "no_activity": "فعالیت اخیری نیست."
+      "no_activity": "فعالیت اخیری نیست.",
+      "showing": "_نمایش {n} از {total}._"
     },
     "market": {
       "search_usage": "نحوهٔ استفاده: /search <query>",

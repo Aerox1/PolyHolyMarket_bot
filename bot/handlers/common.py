@@ -10,6 +10,8 @@ Conventions:
 
 from __future__ import annotations
 
+import html
+
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Message, Update
 from telegram.constants import ChatAction
 from telegram.error import BadRequest
@@ -83,6 +85,33 @@ async def edit_or_reply(update: Update, context: ContextTypes.DEFAULT_TYPE, key:
     if msg is not None:
         await msg.reply_text(body, parse_mode="Markdown", reply_markup=reply_markup,
                              disable_web_page_preview=disable_preview)
+
+
+def esc(value) -> str:
+    """HTML-escape a dynamic value for parse_mode='HTML' messages. Use this on any
+    market title / outcome / user text — legacy Markdown silently breaks on * _ ` [."""
+    return html.escape("" if value is None else str(value), quote=False)
+
+
+async def screen(update: Update, context: ContextTypes.DEFAULT_TYPE, *, text: str,
+                 reply_markup=None, parse_mode: str = "HTML", disable_preview: bool = True) -> None:
+    """Render a text 'screen'. From a callback on a TEXT message, edits it in place
+    (one evolving screen); from a command, a stale callback, or a PHOTO message
+    (e.g. the banner dashboard) sends a fresh message rather than caption-editing it."""
+    query = update.callback_query
+    msg = query.message if query is not None else None
+    if query is not None and isinstance(msg, Message) and not msg.photo:
+        try:
+            await query.edit_message_text(text, parse_mode=parse_mode, reply_markup=reply_markup,
+                                          disable_web_page_preview=disable_preview)
+            return
+        except BadRequest as exc:
+            if "not modified" in str(exc).lower():
+                return
+            # otherwise fall through to a fresh send
+    if update.effective_message is not None:
+        await update.effective_message.reply_text(text, parse_mode=parse_mode, reply_markup=reply_markup,
+                                                   disable_web_page_preview=disable_preview)
 
 
 # ── inline-keyboard helpers ─────────────────────────────────────────────────────

@@ -67,7 +67,8 @@
       "no_trades": "Сделок пока нет.",
       "activity_header": "🕑 *Недавняя активность:*",
       "position_value": "Стоимость",
-      "no_activity": "Недавней активности нет."
+      "no_activity": "Недавней активности нет.",
+      "showing": "_Показано {n} из {total}._"
     },
     "market": {
       "search_usage": "Использование: /search <запрос>",

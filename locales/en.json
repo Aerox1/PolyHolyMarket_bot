@@ -67,7 +67,8 @@
       "no_trades": "No trades yet.",
       "activity_header": "🕑 *Recent activity:*",
       "position_value": "Value",
-      "no_activity": "No recent activity."
+      "no_activity": "No recent activity.",
+      "showing": "_Showing {n} of {total}._"
     },
     "market": {
       "search_usage": "Usage: /search <query>",
