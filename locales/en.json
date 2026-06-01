@@ -85,7 +85,8 @@
       "book_asks": "*Asks (sell):*",
       "book_bids": "*Bids (buy):*",
       "no_book": "No order book available for `{token}`.",
-      "choose_amount": "How much? (USD)"
+      "choose_amount": "How much? (USD)",
+      "not_found": "Market not found — it may be closed or the id is wrong."
     },
     "trade": {
       "buy_usage": "Usage: /buy <token_id> <price> <size>",

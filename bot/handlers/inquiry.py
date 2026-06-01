@@ -33,12 +33,6 @@ _MAX_BOOK_LEVELS = 5
 
 # ── small formatting helpers (local) ─────────────────────────────────────────
 
-def _send(update: Update, text: str):
-    """Send an already-assembled Markdown string to the effective message."""
-    msg = update.effective_message
-    return msg.reply_text(text, parse_mode="Markdown")
-
-
 def _as_float(value, default: float = 0.0) -> float:
     try:
         if value is None or value == "":
@@ -420,107 +414,27 @@ async def activity(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await common.screen(update, context, text="\n".join(lines), reply_markup=_nav(context, "activity"))
 
 
-# ── /search <query> ──────────────────────────────────────────────────────────
-
-async def search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if not context.args:
-        await common.reply(update, context, "bot.market.search_usage")
-        return
-    query = " ".join(context.args)
-    user_id = common.db_user_id(context)
-    await common.typing(update, context)
-    try:
-        pm = await common.manager(context).get_readonly_client(user_id)
-        results = await asyncio.to_thread(pm.search_markets, query, 10)
-    except NoAccountConnected:
-        await _no_account(update, context)
-        return
-    except TradingUnavailable:
-        await common.reply(update, context, "bot.error.trading_unavailable")
-        return
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("search failed: %s", type(exc).__name__)
-        await common.reply(update, context, "bot.error.generic")
-        return
-
-    rows = results if isinstance(results, list) else _as_rows(results)
-    if not rows:
-        await common.reply(update, context, "bot.market.no_results", query=query)
-        return
-
-    lines = [common.tr(context, "bot.market.results_header", query=query), ""]
-    for m in rows[:_MAX_ROWS]:
-        title = m.get("question") or m.get("title") or "?"
-        cid = m.get("conditionId") or m.get("condition_id") or "?"
-        lines.append(f"• *{title}*\n  `{cid}`")
-    await _send(update, "\n".join(lines))
-
-
-# ── /market <condition_id> ───────────────────────────────────────────────────
-
-async def market(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if not context.args:
-        await common.reply(update, context, "bot.market.market_usage")
-        return
-    condition_id = context.args[0]
-    user_id = common.db_user_id(context)
-    await common.typing(update, context)
-    try:
-        pm = await common.manager(context).get_readonly_client(user_id)
-        data = await asyncio.to_thread(pm.get_market, condition_id)
-    except NoAccountConnected:
-        await _no_account(update, context)
-        return
-    except TradingUnavailable:
-        await common.reply(update, context, "bot.error.trading_unavailable")
-        return
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("market failed: %s", type(exc).__name__)
-        await common.reply(update, context, "bot.error.generic")
-        return
-
-    if not data:
-        await common.reply(update, context, "bot.market.no_results", query=condition_id)
-        return
-
-    question = data.get("question", "?")
-    outcomes = data.get("outcomes", "?")
-    prices = data.get("outcomePrices", "?")
-    volume = _fmt_money(data.get("volumeNum") or data.get("volume"))
-    liquidity = _fmt_money(data.get("liquidityNum") or data.get("liquidity"))
-    end_date = data.get("endDate") or data.get("end_date_iso") or "?"
-    tokens = data.get("clobTokenIds", "")
-
-    await _send(
-        update,
-        common.tr(
-            context, "bot.market.detail",
-            question=question,
-            outcomes=outcomes,
-            prices=prices,
-            volume=volume,
-            liquidity=liquidity,
-            end_date=end_date,
-            tokens=tokens,
-        ),
-    )
-
-
-# ── /price <token_id> ────────────────────────────────────────────────────────
+# ── /price <token_id> + panel 💲 Price button ───────────────────────────────
 
 async def price(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not context.args:
         await common.reply(update, context, "bot.market.price_usage")
         return
-    token_id = context.args[0]
+    await render_price(update, context, context.args[0])
+
+
+async def render_price(update: Update, context: ContextTypes.DEFAULT_TYPE, token_id: str) -> None:
+    """Bid/ask/mid/spread for a token. Shared by /price and the market panel."""
     user_id = common.db_user_id(context)
     await common.typing(update, context)
     try:
         pm = await common.manager(context).get_readonly_client(user_id)
-        buy = await asyncio.to_thread(pm.get_price, token_id, "buy")
-        sell = await asyncio.to_thread(pm.get_price, token_id, "sell")
-        mid = await asyncio.to_thread(pm.get_midpoint, token_id)
-        spread = await asyncio.to_thread(pm.get_spread, token_id)
+        buy, sell, mid, spread = await asyncio.gather(  # 4 public reads concurrently
+            asyncio.to_thread(pm.get_price, token_id, "buy"),
+            asyncio.to_thread(pm.get_price, token_id, "sell"),
+            asyncio.to_thread(pm.get_midpoint, token_id),
+            asyncio.to_thread(pm.get_spread, token_id),
+        )
     except NoAccountConnected:
         await _no_account(update, context)
         return
@@ -529,29 +443,34 @@ async def price(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
     except Exception as exc:  # noqa: BLE001
         logger.warning("price failed: %s", type(exc).__name__)
-        await common.reply(update, context, "bot.error.generic")
+        await common.reply(update, context, "bot.market.not_found", reply_markup=_empty_kb(context))
         return
 
-    await _send(
-        update,
-        common.tr(
-            context, "bot.market.price_detail",
-            token=_shorten(token_id, 20),
-            bid=_fmt_price(buy.get("price") if isinstance(buy, dict) else buy),
-            ask=_fmt_price(sell.get("price") if isinstance(sell, dict) else sell),
-            mid=_fmt_price(mid.get("mid") if isinstance(mid, dict) else mid),
-            spread=_fmt_price(spread.get("spread") if isinstance(spread, dict) else spread),
-        ),
+    def _g(d, key):
+        return d.get(key) if isinstance(d, dict) else d
+
+    text = common.tr(
+        context, "bot.market.price_detail",
+        token=_shorten(token_id, 20),
+        bid=_fmt_price(_g(buy, "price")),
+        ask=_fmt_price(_g(sell, "price")),
+        mid=_fmt_price(_g(mid, "mid")),
+        spread=_fmt_price(_g(spread, "spread")),
     )
+    await common.screen(update, context, text=text, parse_mode="Markdown", reply_markup=common.with_nav(context))
 
 
-# ── /book <token_id> ─────────────────────────────────────────────────────────
+# ── /book <token_id> + panel 📗 Book button ──────────────────────────────────
 
 async def book(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not context.args:
         await common.reply(update, context, "bot.market.book_usage")
         return
-    token_id = context.args[0]
+    await render_book(update, context, context.args[0])
+
+
+async def render_book(update: Update, context: ContextTypes.DEFAULT_TYPE, token_id: str) -> None:
+    """Aligned depth ladder for a token. Shared by /book and the market panel."""
     user_id = common.db_user_id(context)
     await common.typing(update, context)
     try:
@@ -565,24 +484,29 @@ async def book(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
     except Exception as exc:  # noqa: BLE001
         logger.warning("book failed: %s", type(exc).__name__)
-        await common.reply(update, context, "bot.error.generic")
+        await common.reply(update, context, "bot.market.not_found", reply_markup=_empty_kb(context))
         return
 
     bids = (data.get("bids", []) if isinstance(data, dict) else [])[:_MAX_BOOK_LEVELS]
     asks = (data.get("asks", []) if isinstance(data, dict) else [])[:_MAX_BOOK_LEVELS]
     if not bids and not asks:
-        await common.reply(update, context, "bot.market.no_book", token=_shorten(token_id, 20))
+        await common.reply(update, context, "bot.market.no_book", reply_markup=common.with_nav(context),
+                           token=_shorten(token_id, 20))
         return
 
-    lines = [common.tr(context, "bot.market.book_header", token=_shorten(token_id, 20)), ""]
-    lines.append(common.tr(context, "bot.market.book_asks"))
-    for a in reversed(asks):
-        lines.append(f"  ${_fmt_price(a.get('price'))} — {_fmt_money(a.get('size'))}")
-    lines.append("———————")
-    lines.append(common.tr(context, "bot.market.book_bids"))
-    for b in bids:
-        lines.append(f"  ${_fmt_price(b.get('price'))} — {_fmt_money(b.get('size'))}")
-    await _send(update, "\n".join(lines))
+    head = common.tr(context, "bot.market.book_header", token=_shorten(token_id, 20)).replace("*", "").replace("`", "")
+    asks_lbl = common.tr(context, "bot.market.book_asks").replace("*", "")
+    bids_lbl = common.tr(context, "bot.market.book_bids").replace("*", "")
+
+    def ladder(levels):
+        return "\n".join(f"{_fmt_price(l.get('price')):>8}  {_fmt_money(l.get('size')):>12}" for l in levels) or "—"
+
+    lines = [
+        f"<b>{common.esc(head)}</b>", "",
+        f"🔴 <b>{common.esc(asks_lbl)}</b>", f"<pre>{ladder(list(reversed(asks)))}</pre>",
+        f"🟢 <b>{common.esc(bids_lbl)}</b>", f"<pre>{ladder(bids)}</pre>",
+    ]
+    await common.screen(update, context, text="\n".join(lines), reply_markup=common.with_nav(context))
 
 
 # ── refresh / cross-link callbacks (inq:<command>) ───────────────────────────
@@ -633,7 +557,5 @@ def register(application: Application) -> None:
     application.add_handler(CommandHandler("orders", orders))
     application.add_handler(CommandHandler("trades", trades))
     application.add_handler(CommandHandler("activity", activity))
-    application.add_handler(CommandHandler("search", search))
-    application.add_handler(CommandHandler("market", market))
     application.add_handler(CommandHandler("price", price))
     application.add_handler(CommandHandler("book", book))

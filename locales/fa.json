@@ -85,7 +85,8 @@
       "book_asks": "*فروش‌ها (sell):*",
       "book_bids": "*خریدها (buy):*",
       "no_book": "دفتر سفارشی برای `{token}` در دسترس نیست.",
-      "choose_amount": "چه مقدار؟ (دلار)"
+      "choose_amount": "چه مقدار؟ (دلار)",
+      "not_found": "مارکت پیدا نشد — ممکن است بسته شده باشد یا شناسه اشتباه است."
     },
     "trade": {
       "buy_usage": "نحوهٔ استفاده: /buy <token_id> <price> <size>",

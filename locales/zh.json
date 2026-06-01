@@ -85,7 +85,8 @@
       "book_asks": "*卖单（卖出）：*",
       "book_bids": "*买单（买入）：*",
       "no_book": "`{token}` 暂无可用的订单簿。",
-      "choose_amount": "买多少？（USD）"
+      "choose_amount": "买多少？（USD）",
+      "not_found": "未找到市场——可能已关闭或 id 有误。"
     },
     "trade": {
       "buy_usage": "用法：/buy <token_id> <price> <size>",

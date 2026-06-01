@@ -85,7 +85,8 @@
       "book_asks": "*Аски (продажа):*",
       "book_bids": "*Биды (покупка):*",
       "no_book": "Стакан заявок для `{token}` недоступен.",
-      "choose_amount": "Сколько? (USD)"
+      "choose_amount": "Сколько? (USD)",
+      "not_found": "Рынок не найден — возможно, он закрыт или неверный id."
     },
     "trade": {
       "buy_usage": "Использование: /buy <token_id> <price> <size>",
