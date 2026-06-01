@@ -131,6 +131,32 @@ def _result_order_id(result) -> str | None:
     return None
 
 
+_FUNDING_HINTS = ("insufficient", "not enough", "allowance", "balance", "funds", "fund")
+
+
+def _fail_key(detail: str) -> str:
+    """Pick a friendly funding message when the CLOB error looks like a money problem."""
+    d = (detail or "").lower()
+    return "bot.order.insufficient" if any(s in d for s in _FUNDING_HINTS) else "bot.order.failed"
+
+
+def _exc_detail(exc) -> str:
+    """Best-effort human reason from a CLOB exception (CLOB errors carry no key material).
+    py-clob-client's PolyApiException exposes the API body on ``error_msg``."""
+    em = getattr(exc, "error_msg", None)
+    if isinstance(em, dict):
+        return str(em.get("error") or em.get("message") or em.get("errorMsg") or em)
+    if em:
+        return str(em)
+    return str(exc)
+
+
+def _result_detail(result) -> str:
+    if isinstance(result, dict):
+        return str(result.get("error") or result.get("errorMsg") or result.get("message") or "")
+    return ""
+
+
 async def _execute(update: Update, context: ContextTypes.DEFAULT_TYPE, intent: dict, query=None) -> None:
     user_id = common.db_user_id(context)
 
@@ -140,6 +166,16 @@ async def _execute(update: Update, context: ContextTypes.DEFAULT_TYPE, intent: d
             await query.edit_message_text(text, parse_mode="Markdown", reply_markup=markup)
         elif update.effective_message is not None:
             await update.effective_message.reply_text(text, parse_mode="Markdown", reply_markup=markup)
+
+    async def _fail(detail: str) -> None:
+        """Report a failed order: friendly funding message, else the real reason
+        (never an opaque 'try again')."""
+        key = _fail_key(detail)
+        nav = common.with_nav(context)
+        if key == "bot.order.failed" and detail:
+            await respond("bot.order.failed_reason", markup=nav, reason=common.md_safe(detail, 140))
+        else:
+            await respond(key, markup=nav)
 
     try:
         pm = await common.manager(context).get_trading_client(user_id)
@@ -180,16 +216,12 @@ async def _execute(update: Update, context: ContextTypes.DEFAULT_TYPE, intent: d
             await respond("bot.error.generic")
             return
     except Exception as exc:  # noqa: BLE001 — CLOB errors carry no key material
-        logger.warning("execute %s failed: %s", kind, type(exc).__name__)
+        detail = _exc_detail(exc)
+        logger.warning("execute %s failed: %s — %.200s", kind, type(exc).__name__, detail)
         await _audit(AuditEvent.ORDER_ERROR, user_id, account_id, {"kind": kind, "error": type(exc).__name__})
         if kind in ("limit", "market", "close") and account_id is not None:
             await _log_order(account_id, intent, status="rejected", error=type(exc).__name__)
-        # Surface a clearer cause when the CLOB error looks like a funding problem.
-        _m = str(exc).lower()
-        fail_key = ("bot.order.insufficient"
-                    if any(s in _m for s in ("insufficient", "not enough", "allowance", "balance"))
-                    else "bot.order.failed")
-        await respond(fail_key, markup=common.with_nav(context))
+        await _fail(detail)
         return
 
     # ── interpret result ──
@@ -197,7 +229,7 @@ async def _execute(update: Update, context: ContextTypes.DEFAULT_TYPE, intent: d
         cancel_ok = _result_ok(result)
         await _audit(AuditEvent.CANCEL_RESULT, user_id, account_id, {"kind": kind, "ok": cancel_ok})
         if not cancel_ok:
-            await respond("bot.order.failed", markup=common.with_nav(context))
+            await _fail(_result_detail(result))
         elif kind == "cancel":
             await respond("bot.order.cancelled", markup=common.with_nav(context), order_id=intent.get("order_id", ""))
         else:
@@ -217,7 +249,7 @@ async def _execute(update: Update, context: ContextTypes.DEFAULT_TYPE, intent: d
         await _record_activity(user_id, intent)
 
     if not ok:
-        await respond("bot.order.failed", markup=common.with_nav(context))
+        await _fail(_result_detail(result))
     elif kind == "close":
         await respond("bot.order.closed", markup=common.with_nav(context), token=_short(token))
     else:

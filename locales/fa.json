@@ -128,7 +128,8 @@
       "cancelled": "✅ سفارش `{order_id}` لغو شد.",
       "cancelled_all": "✅ {count} سفارش باز لغو شد.",
       "closed": "✅ موقعیت در `{token}` بسته شد.",
-      "insufficient": "❌ سفارش ناموفق — موجودی برای این سفارش کافی نیست."
+      "insufficient": "❌ سفارش ناموفق — موجودی برای این سفارش کافی نیست.",
+      "failed_reason": "❌ سفارش ناموفق: {reason}"
     },
     "settings": {
       "header": "⚙️ *تنظیمات*",

@@ -128,7 +128,8 @@
       "cancelled": "✅ 订单 `{order_id}` 已取消。",
       "cancelled_all": "✅ 已取消 {count} 笔未成交订单。",
       "closed": "✅ `{token}` 的持仓已平仓。",
-      "insufficient": "❌ 下单失败——余额不足以完成此订单。"
+      "insufficient": "❌ 下单失败——余额不足以完成此订单。",
+      "failed_reason": "❌ 下单失败：{reason}"
     },
     "settings": {
       "header": "⚙️ *设置*",

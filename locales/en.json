@@ -128,7 +128,8 @@
       "cancelled": "✅ Order `{order_id}` cancelled.",
       "cancelled_all": "✅ Cancelled {count} open order(s).",
       "closed": "✅ Position in `{token}` closed.",
-      "insufficient": "❌ Order failed — not enough balance for this order."
+      "insufficient": "❌ Order failed — not enough balance for this order.",
+      "failed_reason": "❌ Order failed: {reason}"
     },
     "settings": {
       "header": "⚙️ *Settings*",
