@@ -84,7 +84,8 @@
       "book_header": "📗 *订单簿* `{token}`",
       "book_asks": "*卖单（卖出）：*",
       "book_bids": "*买单（买入）：*",
-      "no_book": "`{token}` 暂无可用的订单簿。"
+      "no_book": "`{token}` 暂无可用的订单簿。",
+      "choose_amount": "买多少？（USD）"
     },
     "trade": {
       "buy_usage": "用法：/buy <token_id> <price> <size>",
@@ -112,7 +113,8 @@
       "expired": "⌛ 此确认已过期。请重新执行该命令。",
       "aborted": "已取消——未提交任何订单。",
       "cancel": "取消订单 `{order_id}`？",
-      "sell_pos": "确认 *卖出 {pct}%* {title} — {shares} 份（≈ ${est}）？"
+      "sell_pos": "确认 *卖出 {pct}%* {title} — {shares} 份（≈ ${est}）？",
+      "buy_market": "确认 *买入 {outcome}* — {title}？花费 ${amount}（市价单）。"
     },
     "order": {
       "placed": "✅ 订单已提交。\nID：`{order_id}`\n状态：{status}",
@@ -151,7 +153,9 @@
       "market_line": "*{n}.* {q}\n   YES {yes} · NO {no} · 成交量 {vol}",
       "none": "暂无可用市场，请稍后再试。",
       "trade_hint": "_点击 token id 复制，然后使用 /marketbuy <token> <usd> 或 /buy。_",
-      "trending_header": "🔥 *热门市场*"
+      "trending_header": "🔥 *热门市场*",
+      "cats_btn": "🗂 分类",
+      "outdated": "此列表已过期——请重新打开 🔥 热门。"
     },
     "rewards": {
       "screen": "💰 *奖励*\n\n⭐ *你的积分：* {balance}\n\n*邀请*\n• 直接：{direct} · 间接：{indirect} · 活跃：{unlocked}\n• 邀请获得的积分：{referral_points}\n\n*玩法说明*\n逐层递减的多层级邀请：{layers}。好友需下满 {unlock_bets} 注才能解锁——解锁后你们双方各得 {signup} 积分，且你可从其各层级的活动中赚取分成。\n\n🔗 *你的邀请链接*\n`{link}`\n分享出去——你的好友也能获得新人奖励。"

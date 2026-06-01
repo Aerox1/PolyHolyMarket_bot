@@ -84,7 +84,8 @@
       "book_header": "📗 *Order book* `{token}`",
       "book_asks": "*Asks (sell):*",
       "book_bids": "*Bids (buy):*",
-      "no_book": "No order book available for `{token}`."
+      "no_book": "No order book available for `{token}`.",
+      "choose_amount": "How much? (USD)"
     },
     "trade": {
       "buy_usage": "Usage: /buy <token_id> <price> <size>",
@@ -112,7 +113,8 @@
       "expired": "⌛ This confirmation expired. Please run the command again.",
       "aborted": "Cancelled — no order was placed.",
       "cancel": "Cancel order `{order_id}`?",
-      "sell_pos": "Confirm *SELL {pct}%* of {title} — {shares} shares (≈ ${est})?"
+      "sell_pos": "Confirm *SELL {pct}%* of {title} — {shares} shares (≈ ${est})?",
+      "buy_market": "Confirm *BUY {outcome}* — {title}? Spend ${amount} (market order)."
     },
     "order": {
       "placed": "✅ Order placed.\nID: `{order_id}`\nStatus: {status}",
@@ -143,7 +145,9 @@
       "market_line": "*{n}.* {q}\n   YES {yes} · NO {no} · {vol} vol",
       "category_line": "*{n}.* {title} — {vol} vol",
       "trade_hint": "_Tap a token id to copy, then /marketbuy <token> <usd> or /buy._",
-      "none": "No markets available right now. Try again shortly."
+      "none": "No markets available right now. Try again shortly.",
+      "cats_btn": "🗂 Categories",
+      "outdated": "This list is outdated — open 🔥 Trending again."
     },
     "settle": {
       "won": "🎉 *Your bet won!*\n{outcome} on “{q}”\nPayout ${payout}  ·  P&L +${pnl}",
