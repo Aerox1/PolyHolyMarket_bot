@@ -132,6 +132,44 @@
       "banned": "🚫 您的访问权限已被撤销。",
       "rate_limited": "⏳ 请求过于频繁——请放慢速度。",
       "generic": "⚠️ 出了点问题，请重试。"
+    },
+    "dash": {
+      "balance_hint": "点击 ↻ Refresh 刷新",
+      "coming_soon": "⭐ 自选列表即将上线。",
+      "connected": "💼 *你的账户*\n`{wallet}`  _(点击复制)_\n余额：{balance}\n\n🔗 *邀请赚奖励*\n`{link}`\n好友通过你的链接加入并开始下注后，即可解锁奖励。\n\n你想做什么？",
+      "play_hint": "🎲 滑动小游戏会作为小程序从机器人的菜单按钮打开。（部署时设置 WEBAPP_BASE_URL，即可直接从此卡片打开。）",
+      "trade_hint": "如何交易：打开 🔥 Trending 或 🎲 Play 选择市场，或使用 `/buy <token> <price> <size>` 或 `/marketbuy <token> <usd>`。",
+      "welcome": "👋 *欢迎你，{name}！*\n\n连接你的 Polymarket 钱包，即可开始交易并赚取积分。\n\n🔗 *你的邀请链接*（分享可赚奖励）\n`{link}`\n\n点击下方卡片 👇"
+    },
+    "discover": {
+      "categories_header": "🗂 *热门分类*",
+      "category_line": "*{n}.* {title} — 成交量 {vol}",
+      "market_line": "*{n}.* {q}\n   YES {yes} · NO {no} · 成交量 {vol}",
+      "none": "暂无可用市场，请稍后再试。",
+      "trade_hint": "_点击 token id 复制，然后使用 /marketbuy <token> <usd> 或 /buy。_",
+      "trending_header": "🔥 *热门市场*"
+    },
+    "rewards": {
+      "screen": "💰 *奖励*\n\n⭐ *你的积分：* {balance}\n\n*邀请*\n• 直接：{direct} · 间接：{indirect} · 活跃：{unlocked}\n• 邀请获得的积分：{referral_points}\n\n*玩法说明*\n逐层递减的多层级邀请：{layers}。好友需下满 {unlock_bets} 注才能解锁——解锁后你们双方各得 {signup} 积分，且你可从其各层级的活动中赚取分成。\n\n🔗 *你的邀请链接*\n`{link}`\n分享出去——你的好友也能获得新人奖励。"
+    },
+    "settle": {
+      "lost": "❌ *下注已结算*\n“{q}” 的 {outcome} —— 亏损 ${amount}。",
+      "void": "↩️ *下注已退款*\n你在 “{q}” 上的 ${amount} 已退回（市场作废）。",
+      "won": "🎉 *你的下注赢了！*\n“{q}” 的 {outcome}\n回款 ${payout}  ·  P&L +${pnl}"
+    },
+    "tile": {
+      "accounts": "🔗 钱包",
+      "buy": "💵 买入",
+      "help": "ℹ️ 帮助",
+      "orders": "📋 订单",
+      "play": "🎲 游戏",
+      "positions": "📈 持仓",
+      "refresh": "↻ 刷新",
+      "rewards": "💰 奖励",
+      "sell": "💸 卖出",
+      "settings": "⚙️ 设置",
+      "trending": "🔥 热门",
+      "watchlist": "⭐ 自选"
     }
   },
   "dash": {
@@ -162,7 +200,8 @@
       "broadcast": "广播",
       "audit": "审计日志",
       "settings": "设置",
-      "logout": "退出登录"
+      "logout": "退出登录",
+      "miniapp": "小程序"
     },
     "users": {
       "title": "用户",
@@ -252,6 +291,41 @@
       "last_login": "上次登录",
       "role": "角色",
       "superadmin": "超级管理员"
+    },
+    "miniapp": {
+      "back": "← 返回小程序",
+      "categories": "分类",
+      "category": "分类",
+      "default_prompt": "默认提示词",
+      "edit": "编辑",
+      "edit_title": "编辑分类",
+      "gemini": "Gemini 图像预算",
+      "gemini_not_configured": "未配置 GEMINI_API_KEY——在设置有效密钥前，分类卡片将使用占位渐变背景。",
+      "hidden": "已隐藏",
+      "hide": "隐藏",
+      "image": "图像",
+      "images_7d": "图像（7 天）",
+      "no_categories": "尚未同步任何分类。",
+      "no_image": "暂无图像",
+      "pin": "置顶",
+      "preview": "预览",
+      "prompt": "图像提示词（自定义）",
+      "prompt_placeholder": "留空则使用默认的双面提示词…",
+      "regen": "重新生成图像",
+      "regen_note": "“Regenerate” 会清除该图像，让小程序服务在下次刷新时重新生成（在每周预算范围内）。",
+      "regen_on_save": "保存时重新生成图像（使用此提示词，在预算范围内）",
+      "spent_7d": "已花费（7 天）",
+      "title": "小程序",
+      "unhide": "取消隐藏",
+      "unpin": "取消置顶",
+      "upload": "上传替换图像",
+      "upload_note": "上传 PNG/JPEG/WEBP 文件可直接替换此卡片图像（不调用 Gemini）。",
+      "visible": "可见",
+      "volume": "成交量",
+      "weekly_budget": "每周预算",
+      "welcome_none": "尚无欢迎横幅——它会自动生成，或在下方上传一张。",
+      "welcome_note": "此图像显示在机器人 /start 界面的顶部。“Regenerate” 会将其清除，让小程序服务在下次启动时重新生成（在预算范围内）；上传则会立即替换。",
+      "welcome_title": "欢迎横幅（显示于 /start）"
     }
   }
 }
