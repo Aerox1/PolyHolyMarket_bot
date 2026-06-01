@@ -322,7 +322,10 @@
       "prompt": "Image prompt (custom)",
       "prompt_placeholder": "Leave blank to use the default two-sided prompt…",
       "default_prompt": "Default prompt",
-      "regen_on_save": "Regenerate image on save (uses this prompt, within budget)"
+      "regen_on_save": "Regenerate image on save (uses this prompt, within budget)",
+      "welcome_title": "Welcome banner (shown on /start)",
+      "welcome_none": "No welcome banner yet — it is generated automatically, or upload one below.",
+      "welcome_note": "This image appears at the top of the bot's /start screen. “Regenerate” drops it so the Mini App service re-creates it on its next start (within budget); uploading replaces it instantly."
     }
   }
 }

@@ -284,6 +284,46 @@ def save_category_image(db: Session, category_id: int, data: bytes) -> bool:
     return True
 
 
+# ── Welcome banner (the /start hero image) ──────────────────────────────────────
+
+def welcome_banner(db: Session) -> dict:
+    """Current welcome-banner state for the admin Mini App page."""
+    from core.gemini import DEFAULT_WELCOME_PROMPT, WELCOME_PATH_KEY, WELCOME_PROMPT_KEY, welcome_image_file
+
+    f = welcome_image_file()
+    return {
+        "path": appconfig.get_sync(db, WELCOME_PATH_KEY) or (f"/cards/{f.name}" if f else None),
+        "exists": f is not None,
+        "prompt": appconfig.get_sync(db, WELCOME_PROMPT_KEY) or "",
+        "default_prompt": DEFAULT_WELCOME_PROMPT,
+    }
+
+
+def set_welcome_prompt(db: Session, prompt: str, *, regenerate: bool = False) -> None:
+    """Save the welcome-banner prompt. If regenerate, drop the cached image so the
+    webapp (which holds the Gemini key) re-creates it on its next startup."""
+    from core.gemini import WELCOME_PATH_KEY, WELCOME_PROMPT_KEY, welcome_image_file
+
+    appconfig.set_sync(db, WELCOME_PROMPT_KEY, prompt.strip())
+    if regenerate:
+        f = welcome_image_file()
+        if f is not None:
+            f.unlink(missing_ok=True)
+        appconfig.set_sync(db, WELCOME_PATH_KEY, "")
+
+
+def save_welcome_image(db: Session, data: bytes) -> None:
+    """Save an admin-uploaded welcome banner (no Gemini needed)."""
+    from core.gemini import WELCOME_PATH_KEY, WELCOME_SLUG, cards_dir, welcome_image_file
+
+    # Clear any prior cached file (could be a different extension) then write PNG.
+    old = welcome_image_file()
+    if old is not None:
+        old.unlink(missing_ok=True)
+    (cards_dir() / f"{WELCOME_SLUG}.png").write_bytes(data)
+    appconfig.set_sync(db, WELCOME_PATH_KEY, f"/cards/{WELCOME_SLUG}.png")
+
+
 def gemini_budget(db: Session) -> float:
     return appconfig.get_float_sync(db, appconfig.GEMINI_WEEKLY_BUDGET, settings.gemini_weekly_budget_usd)
 

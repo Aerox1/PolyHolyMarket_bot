@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     # ── Telegram ──────────────────────────────────────────
     telegram_bot_token: str = Field("", alias="TELEGRAM_BOT_TOKEN")
     telegram_allowed_users: str = Field("", alias="TELEGRAM_ALLOWED_USERS")
+    # Ignore system/env proxies for Telegram (a macOS system proxy / VPN otherwise
+    # drops PTB's connections). Set true only if you MUST route via a proxy.
+    telegram_trust_env: bool = Field(False, alias="TELEGRAM_TRUST_ENV")
 
     # ── Encryption ────────────────────────────────────────
     encryption_key: str = Field("", alias="ENCRYPTION_KEY")

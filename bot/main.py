@@ -13,6 +13,7 @@ import logging
 
 from telegram import BotCommand, Update
 from telegram.ext import Application, ApplicationBuilder, ContextTypes, TypeHandler
+from telegram.request import HTTPXRequest
 
 from core.config import settings
 from core.logging import setup_logging
@@ -57,6 +58,11 @@ async def _post_init(app: Application) -> None:
         logger.warning("set_my_commands failed: %s", type(exc).__name__)
 
 
+async def _on_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Log handler errors cleanly (network blips, etc.) instead of crashing."""
+    logger.warning("Handler error: %s", type(context.error).__name__)
+
+
 async def _post_shutdown(app: Application) -> None:
     mgr: AccountManager | None = app.bot_data.get("account_manager")
     if mgr:
@@ -67,13 +73,20 @@ def build_application() -> Application:
     if not settings.telegram_bot_token:
         raise RuntimeError("TELEGRAM_BOT_TOKEN is not set.")
 
+    # trust_env=False makes httpx ignore a macOS/VPN system proxy that otherwise
+    # drops Telegram connections (NetworkError/RemoteProtocolError on send).
+    _kw = {"httpx_kwargs": {"trust_env": settings.telegram_trust_env}}
     app = (
         ApplicationBuilder()
         .token(settings.telegram_bot_token)
+        .request(HTTPXRequest(**_kw))
+        .get_updates_request(HTTPXRequest(**_kw))
         .post_init(_post_init)
         .post_shutdown(_post_shutdown)
         .build()
     )
+
+    app.add_error_handler(_on_error)
 
     # Per-user client factory backed by the encrypted DB credential store.
     store = DbCredentialStore(async_session_factory())

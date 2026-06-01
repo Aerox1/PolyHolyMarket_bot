@@ -57,8 +57,13 @@ def create_app() -> FastAPI:
         async def _bg() -> None:
             try:
                 from webapp import sync
+                from core import gemini
+                from db.engine import async_session_scope
                 await sync.sync_categories()
                 await sync.generate_pending_images()
+                # Generate the /start welcome banner once (skipped if it exists).
+                async with async_session_scope() as s:
+                    await gemini.generate_welcome_image(s)
             except Exception as exc:  # noqa: BLE001
                 logger.warning("startup category sync skipped: %s", type(exc).__name__)
         asyncio.create_task(_bg())

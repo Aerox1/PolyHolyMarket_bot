@@ -10,10 +10,11 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, WebAppInfo
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Message, Update, WebAppInfo
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes
 
 from bot.handlers import common, discover, inquiry
+from core import gemini
 from core.config import settings
 from core.i18n import LANG_FLAGS, LANG_NAMES, SUPPORTED, t
 from db.engine import async_session_scope
@@ -96,12 +97,32 @@ async def _dashboard_text(update: Update, context: ContextTypes.DEFAULT_TYPE, *,
 async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE, *, balance: float | None = None, edit: bool = False) -> None:
     text, connected = await _dashboard_text(update, context, balance=balance)
     kb = dashboard_keyboard(context, connected=connected)
+    banner = gemini.welcome_image_file()  # admin-managed Gemini hero image (or None)
+
     if edit and update.callback_query is not None:
-        await update.callback_query.edit_message_text(text, reply_markup=kb, parse_mode="Markdown",
-                                                       disable_web_page_preview=True)
-    elif update.effective_message is not None:
-        await update.effective_message.reply_text(text, reply_markup=kb, parse_mode="Markdown",
-                                                   disable_web_page_preview=True)
+        msg = update.callback_query.message
+        # If the original /start was sent as a photo (banner present), edit its
+        # caption; otherwise edit the text. Telegram won't convert between the two.
+        # ``message`` may be an InaccessibleMessage (stale callback >48h) with no
+        # .photo attr — isinstance guard falls through to edit via the query.
+        if isinstance(msg, Message) and msg.photo:
+            await msg.edit_caption(caption=text, reply_markup=kb, parse_mode="Markdown")
+        else:
+            await update.callback_query.edit_message_text(text, reply_markup=kb, parse_mode="Markdown",
+                                                           disable_web_page_preview=True)
+        return
+
+    if update.effective_message is None:
+        return
+    if banner is not None:
+        try:
+            await update.effective_message.reply_photo(
+                photo=banner, caption=text[:1024], reply_markup=kb, parse_mode="Markdown")
+            return
+        except Exception as exc:  # noqa: BLE001 — fall back to text if the upload fails
+            logger.info("welcome banner send failed: %s", type(exc).__name__)
+    await update.effective_message.reply_text(text, reply_markup=kb, parse_mode="Markdown",
+                                               disable_web_page_preview=True)
 
 
 # ── handlers ──────────────────────────────────────────────────────────────────

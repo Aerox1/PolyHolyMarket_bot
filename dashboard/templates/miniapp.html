@@ -42,6 +42,48 @@
     </div>
   </div>
 
+  {# ── Welcome banner (the /start hero image) ────────────────────────────── #}
+  <div class="card">
+    <div class="card-header"><h2>{{ t('dash.miniapp.welcome_title') }}</h2></div>
+    <div class="grid-2">
+      <div class="card-body" style="display:flex; flex-direction:column; align-items:center; gap:12px;">
+        {% if welcome.path %}
+          <img src="{{ welcome.path }}" alt=""
+               style="width:100%; max-width:360px; border-radius:12px; box-shadow:0 8px 24px rgba(0,0,0,.4);">
+        {% else %}
+          <div class="empty">{{ t('dash.miniapp.welcome_none') }}</div>
+        {% endif %}
+        <form method="POST" action="/miniapp/welcome/upload" enctype="multipart/form-data"
+              style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="file" name="image" accept="image/png,image/jpeg,image/webp" required>
+          <button class="btn" type="submit">{{ t('dash.miniapp.upload') }}</button>
+        </form>
+        <div class="notice">{{ t('dash.miniapp.upload_note') }}</div>
+      </div>
+      <div class="card-body">
+        <form method="POST" action="/miniapp/welcome">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <div class="field">
+            <label for="welcome_prompt">{{ t('dash.miniapp.prompt') }}</label>
+            <textarea class="textarea" id="welcome_prompt" name="prompt" rows="6"
+                      placeholder="{{ t('dash.miniapp.prompt_placeholder') }}">{{ welcome.prompt }}</textarea>
+          </div>
+          <div class="notice">
+            <strong>{{ t('dash.miniapp.default_prompt') }}:</strong>
+            <span class="hint">{{ welcome.default_prompt }}</span>
+          </div>
+          <div class="checkbox-row">
+            <input type="checkbox" id="welcome_regen" name="regenerate" value="true">
+            <label for="welcome_regen">{{ t('dash.miniapp.regen_on_save') }}</label>
+          </div>
+          <button class="btn primary" type="submit">{{ t('dash.common.save') }}</button>
+        </form>
+        <div class="notice">{{ t('dash.miniapp.welcome_note') }}</div>
+      </div>
+    </div>
+  </div>
+
   {# ── Categories ────────────────────────────────────────────────────────── #}
   <div class="card">
     <div class="card-header"><h2>{{ t('dash.miniapp.categories') }}</h2></div>

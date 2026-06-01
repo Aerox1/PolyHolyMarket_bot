@@ -268,7 +268,38 @@ def audit_log(
 @router.get("/miniapp")
 def miniapp_page(request: Request, admin: Admin = Depends(require_admin), db: Session = Depends(get_db)):
     return deps.render(request, "miniapp.html", admin=admin,
-                       categories=repo.list_categories(db), gemini=repo.gemini_stats(db))
+                       categories=repo.list_categories(db), gemini=repo.gemini_stats(db),
+                       welcome=repo.welcome_banner(db))
+
+
+@router.post("/miniapp/welcome")
+def miniapp_welcome_save(
+    request: Request,
+    prompt: str = Form(""),
+    regenerate: bool = Form(False),
+    admin: Admin = Depends(require_admin),
+    db: Session = Depends(get_db),
+    _csrf: None = Depends(verify_csrf),
+):
+    repo.set_welcome_prompt(db, prompt, regenerate=regenerate)
+    return RedirectResponse("/miniapp", status_code=HTTP_303_SEE_OTHER)
+
+
+@router.post("/miniapp/welcome/upload")
+def miniapp_welcome_upload(
+    request: Request,
+    image: UploadFile = File(...),
+    admin: Admin = Depends(require_admin),
+    db: Session = Depends(get_db),
+    _csrf: None = Depends(verify_csrf),
+):
+    data = image.file.read()
+    if not (data[:8] == b"\x89PNG\r\n\x1a\n" or data[:3] == b"\xff\xd8\xff" or data[8:12] == b"WEBP"):
+        raise HTTPException(status_code=400, detail="upload a PNG, JPEG or WEBP image")
+    if len(data) > 8 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="image too large (max 8MB)")
+    repo.save_welcome_image(db, data)
+    return RedirectResponse("/miniapp", status_code=HTTP_303_SEE_OTHER)
 
 
 @router.post("/miniapp/budget")

@@ -97,10 +97,13 @@ def _save(slug: str, img: bytes, mime: str) -> str:
     return f"/cards/{fname}"  # served by the webapp
 
 
-async def generate_category_image(session: AsyncSession, category) -> str | None:
-    """Generate + cache a category image, honoring the weekly budget.
+async def generate_image(
+    session: AsyncSession, *, slug: str, prompt: str, category_id: int | None = None
+) -> str | None:
+    """Generate + cache ONE image under ``cards/{slug}.*``, honoring the weekly
+    budget. Generic core shared by category cards and the welcome banner.
 
-    Returns the served image path on success, or None (caller uses a placeholder).
+    Returns the served image path on success, or None (budget/no-key/failure).
     """
     if not settings.gemini_api_key:
         return None
@@ -109,23 +112,76 @@ async def generate_category_image(session: AsyncSession, category) -> str | None
     spent = await gemini_usage.weekly_spend(session)
     cost = settings.gemini_image_cost_usd
     if spent + cost > budget:
-        logger.info("Gemini weekly budget reached (%.2f/%.2f) — skipping %s", spent, budget, category.slug)
+        logger.info("Gemini weekly budget reached (%.2f/%.2f) — skipping %s", spent, budget, slug)
         return None
-
-    # Admin-set custom prompt takes priority over the default two-sided template.
-    prompt = (getattr(category, "prompt_override", None) or "").strip() or build_prompt(category.title)
-    await categories_repo.set_image(session, category.id, path=None, status="generating", prompt=prompt)
 
     try:
         img, mime = await asyncio.to_thread(_call_gemini_image, prompt)
     except Exception as exc:  # noqa: BLE001 — never log the key; httpx errors don't contain it
-        logger.warning("Gemini image failed for %s: %s", category.slug, type(exc).__name__)
-        await gemini_usage.record(session, category_id=category.id, cost_usd=0, model=settings.gemini_image_model, ok=False)
-        await categories_repo.set_image(session, category.id, path=None, status="failed")
+        logger.warning("Gemini image failed for %s: %s", slug, type(exc).__name__)
+        await gemini_usage.record(session, category_id=category_id, cost_usd=0, model=settings.gemini_image_model, ok=False)
         return None
 
-    path = _save(category.slug, img, mime)
-    await gemini_usage.record(session, category_id=category.id, cost_usd=cost, model=settings.gemini_image_model, ok=True)
-    await categories_repo.set_image(session, category.id, path=path, status="ready")
-    logger.info("Generated card image for %s (%d bytes)", category.slug, len(img))
+    path = _save(slug, img, mime)
+    await gemini_usage.record(session, category_id=category_id, cost_usd=cost, model=settings.gemini_image_model, ok=True)
+    logger.info("Generated image for %s (%d bytes)", slug, len(img))
+    return path
+
+
+async def generate_category_image(session: AsyncSession, category) -> str | None:
+    """Generate + cache a category card image, tracking the category's status.
+
+    Returns the served image path on success, or None (caller uses a placeholder).
+    """
+    if not settings.gemini_api_key:
+        return None
+    # Admin-set custom prompt takes priority over the default two-sided template.
+    prompt = (getattr(category, "prompt_override", None) or "").strip() or build_prompt(category.title)
+    await categories_repo.set_image(session, category.id, path=None, status="generating", prompt=prompt)
+    path = await generate_image(session, slug=category.slug, prompt=prompt, category_id=category.id)
+    await categories_repo.set_image(session, category.id, path=path, status=("ready" if path else "failed"))
+    return path
+
+
+# ── Welcome banner (the image shown at the top of /start) ───────────────────────
+
+WELCOME_SLUG = "welcome"
+WELCOME_PATH_KEY = "welcome_image_path"
+WELCOME_PROMPT_KEY = "welcome_image_prompt"
+DEFAULT_WELCOME_PROMPT = (
+    "A premium, eye-catching WIDE hero banner (16:9) for a prediction-market trading "
+    "app called PolyHolyMarket. Theme: 'Refer. Trade. Earn More.' — dramatic, vibrant, "
+    "abstract financial energy: two opposing glowing market forces meeting at a charged "
+    "central clash line, upward-surging candlestick charts, neon coins and reward "
+    "particles streaming outward, cinematic rim lighting, deep contrast, bold warm-vs-cool "
+    "palette, futuristic premium fintech feel. Leave calmer gradient space along the edges "
+    "for overlaid UI. ABSOLUTELY NO text, words, letters, numbers, logos, signatures, or "
+    "watermarks anywhere — pure imagery only."
+)
+
+
+def welcome_image_file() -> Path | None:
+    """Filesystem path of the cached welcome banner, or None if not generated yet."""
+    for ext in ("png", "jpg", "webp"):
+        p = cards_dir() / f"{WELCOME_SLUG}.{ext}"
+        if p.exists():
+            return p
+    return None
+
+
+async def welcome_prompt(session: AsyncSession) -> str:
+    return (await appconfig.get(session, WELCOME_PROMPT_KEY)) or DEFAULT_WELCOME_PROMPT
+
+
+async def generate_welcome_image(session: AsyncSession, *, force: bool = False) -> str | None:
+    """Generate the welcome banner (unless one already exists and force=False).
+
+    Stores the served path in app_config so the dashboard/bot can find it.
+    """
+    if not force and welcome_image_file() is not None:
+        return await appconfig.get(session, WELCOME_PATH_KEY)
+    prompt = await welcome_prompt(session)
+    path = await generate_image(session, slug=WELCOME_SLUG, prompt=prompt)
+    if path:
+        await appconfig.set_(session, WELCOME_PATH_KEY, path)
     return path
