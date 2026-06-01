@@ -214,8 +214,8 @@ async def _execute(update: Update, context: ContextTypes.DEFAULT_TYPE, intent: d
 
 # ── small helpers ───────────────────────────────────────────────────────────
 
-def _short(token: str) -> str:
-    return f"{token[:8]}…" if token and len(token) > 10 else token
+def _short(token: str) -> str:  # thin alias — single implementation lives in common.short
+    return common.short(token)
 
 
 def _safe_detail(intent: dict) -> dict:

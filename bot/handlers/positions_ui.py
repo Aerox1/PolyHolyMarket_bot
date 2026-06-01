@@ -11,7 +11,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import InlineKeyboardButton, Update
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes
 
 from bot.handlers import common, confirm
@@ -48,10 +48,9 @@ async def manage(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     rows = _rows(positions)
-    token_map: dict[str, tuple[str, float]] = {}
+    payloads: list[tuple[str, float]] = []
     keyboards = []
     lines = [common.tr(context, "bot.inquiry.positions_header")]
-    idx = 0
     for row in rows[:15]:
         if not isinstance(row, dict):
             continue
@@ -65,21 +64,21 @@ async def manage(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if size <= 0:
             continue
         title = _field(row, "title") or _field(row, "outcome") or token[:10]
-        token_map[str(idx)] = (token, size)
+        idx = len(payloads)
+        payloads.append((token, size))
         lines.append(f"{idx + 1}. {title} — {size:g}")
         keyboards.append([
             InlineKeyboardButton(common.tr(context, "bot.trade.sell_pct", pct=50), callback_data=f"pos:{idx}:50"),
             InlineKeyboardButton(common.tr(context, "bot.trade.close_full"), callback_data=f"pos:{idx}:100"),
         ])
-        idx += 1
 
-    if idx == 0:
+    if not payloads:
         await common.reply(update, context, "bot.inquiry.no_positions")
         return
 
-    context.user_data["pos_tokens"] = token_map
+    common.stash(context, "pos_tokens", payloads)
     await update.effective_message.reply_text(
-        "\n".join(lines), parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboards)
+        "\n".join(lines), parse_mode="Markdown", reply_markup=common.with_nav(context, keyboards)
     )
 
 
@@ -90,8 +89,7 @@ async def on_position_action(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if len(parts) != 3:
         return
     _, idx, pct_s = parts
-    token_map = context.user_data.get("pos_tokens") or {}
-    entry = token_map.get(idx)
+    entry = common.from_stash(context, "pos_tokens", idx)
     if entry is None:
         await query.message.reply_text(common.tr(context, "bot.confirm.expired"))
         return
@@ -101,7 +99,7 @@ async def on_position_action(update: Update, context: ContextTypes.DEFAULT_TYPE)
     except ValueError:
         return
 
-    short = f"{token[:8]}…" if len(token) > 10 else token
+    short = common.short(token)
     if pct >= 100:
         intent = confirm.make_intent("close", side="sell", token_id=token, size=size)
         await confirm.request(update, context, intent, "bot.confirm.close", token=short)

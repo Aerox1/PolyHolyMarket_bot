@@ -170,6 +170,10 @@
     },
     "rewards": {
       "screen": "💰 *Rewards*\n\n⭐ *Your points:* {balance}\n\n*Referrals*\n• Direct: {direct} · Indirect: {indirect} · Active: {unlocked}\n• Points from referrals: {referral_points}\n\n*How it works*\nDescending multi-layer referral: {layers}. A friend must place {unlock_bets} bets to unlock — then you BOTH get {signup} points and you earn a share of their activity across layers.\n\n🔗 *Your referral link*\n`{link}`\nShare it — your friends get a welcome bonus too."
+    },
+    "nav": {
+      "home": "🏠 Dashboard",
+      "back": "⬅️ Back"
     }
   },
   "dash": {

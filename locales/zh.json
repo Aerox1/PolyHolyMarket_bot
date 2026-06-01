@@ -170,6 +170,10 @@
       "settings": "⚙️ 设置",
       "trending": "🔥 热门",
       "watchlist": "⭐ 自选"
+    },
+    "nav": {
+      "home": "🏠 主菜单",
+      "back": "⬅️ 返回"
     }
   },
   "dash": {

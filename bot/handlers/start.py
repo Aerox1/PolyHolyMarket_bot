@@ -174,12 +174,15 @@ async def on_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             except Exception as exc:  # noqa: BLE001 — no account / not signable / network
                 logger.info("refresh balance unavailable: %s", type(exc).__name__)
             await show_dashboard(update, context, balance=balance, edit=True)
+        elif action == "home":
+            await show_dashboard(update, context, edit=True)
         elif action == "create":
             await query.message.reply_text(
                 common.tr(context, "bot.create.instructions", url=settings.polymarket_signup_url),
-                parse_mode="Markdown")
+                parse_mode="Markdown", reply_markup=common.with_nav(context))
         elif action == "help":
-            await query.message.reply_text(common.tr(context, "bot.start.help_text"), parse_mode="Markdown")
+            await query.message.reply_text(common.tr(context, "bot.start.help_text"),
+                                           parse_mode="Markdown", reply_markup=common.with_nav(context))
         elif action == "positions":
             await inquiry.positions(update, context)
         elif action == "orders":
@@ -193,11 +196,14 @@ async def on_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         elif action == "settings":
             await _settings(update, context)
         elif action in ("buy", "sell"):
-            await query.message.reply_text(common.tr(context, "bot.dash.trade_hint"), parse_mode="Markdown")
+            await query.message.reply_text(common.tr(context, "bot.dash.trade_hint"),
+                                           parse_mode="Markdown", reply_markup=common.with_nav(context))
         elif action == "watchlist":
-            await query.message.reply_text(common.tr(context, "bot.dash.coming_soon"), parse_mode="Markdown")
+            await query.message.reply_text(common.tr(context, "bot.dash.coming_soon"),
+                                           parse_mode="Markdown", reply_markup=common.with_nav(context))
         elif action == "play":
-            await query.message.reply_text(common.tr(context, "bot.dash.play_hint"), parse_mode="Markdown")
+            await query.message.reply_text(common.tr(context, "bot.dash.play_hint"),
+                                           parse_mode="Markdown", reply_markup=common.with_nav(context))
     except Exception as exc:  # noqa: BLE001
         logger.warning("on_menu(%s) failed: %s", action, type(exc).__name__)
         await common.reply(update, context, "bot.error.generic")
@@ -237,7 +243,8 @@ async def rewards_screen(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         unlock_bets=rewards_repo.REFERRAL_UNLOCK_BETS,
     )
     target = update.callback_query.message if update.callback_query else update.effective_message
-    await target.reply_text(text, parse_mode="Markdown", disable_web_page_preview=True)
+    await target.reply_text(text, parse_mode="Markdown", disable_web_page_preview=True,
+                            reply_markup=common.with_nav(context))
 
 
 async def _accounts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -252,9 +259,9 @@ async def _accounts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     for a in accts:
         lines.append(f"`{a.wallet_address}` ({a.mode})")
         rows.append([InlineKeyboardButton(
-            common.tr(context, "bot.disconnect.button", label=a.label, wallet=a.wallet_address[:6] + "…"),
+            common.tr(context, "bot.disconnect.button", label=a.label, wallet=common.short(a.wallet_address, 6, 4)),
             callback_data=f"disc:{a.account_id}")])
-    await msg.reply_text("\n".join(lines), parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(rows))
+    await msg.reply_text("\n".join(lines), parse_mode="Markdown", reply_markup=common.with_nav(context, rows))
 
 
 async def _settings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -264,7 +271,7 @@ async def _settings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await common.reply(update, context, "bot.start.help_text")
+    await common.reply(update, context, "bot.start.help_text", reply_markup=common.with_nav(context))
 
 
 async def language_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -279,4 +286,4 @@ def register(application: Application) -> None:
     application.add_handler(CallbackQueryHandler(on_language_choice, pattern="^lang:"))
     application.add_handler(CallbackQueryHandler(
         on_menu,
-        pattern="^menu:(create|help|positions|orders|trending|rewards|watchlist|play|settings|accounts|refresh|buy|sell)$"))
+        pattern="^menu:(home|create|help|positions|orders|trending|rewards|watchlist|play|settings|accounts|refresh|buy|sell)$"))

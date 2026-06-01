@@ -10,7 +10,9 @@ Conventions:
 
 from __future__ import annotations
 
-from telegram import Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Message, Update
+from telegram.constants import ChatAction
+from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 
 from core.config import settings
@@ -36,8 +38,89 @@ def tr(context: ContextTypes.DEFAULT_TYPE, key: str, **variables) -> str:
     return t(key, lang_of(context), **variables)
 
 
-async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE, key: str, **variables) -> None:
-    """Reply to the effective message with a translated, Markdown-formatted string."""
+async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE, key: str, *,
+                reply_markup=None, disable_preview: bool = False, **variables) -> None:
+    """Reply to the effective message with a translated Markdown string + optional keyboard."""
     msg = update.effective_message
     if msg is not None:
-        await msg.reply_text(tr(context, key, **variables), parse_mode="Markdown")
+        await msg.reply_text(tr(context, key, **variables), parse_mode="Markdown",
+                             reply_markup=reply_markup, disable_web_page_preview=disable_preview)
+
+
+async def typing(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show a 'typing…' chat action so the user gets instant feedback before a
+    blocking network call. Feedback-only — never raises into the handler."""
+    chat = update.effective_chat
+    if chat is not None:
+        try:
+            await chat.send_action(ChatAction.TYPING)
+        except Exception:  # noqa: BLE001
+            pass
+
+
+async def edit_or_reply(update: Update, context: ContextTypes.DEFAULT_TYPE, key: str | None = None, *,
+                        text: str | None = None, reply_markup=None, disable_preview: bool = False,
+                        **variables) -> None:
+    """Edit the originating message in place when invoked from a callback (handling
+    the photo-caption case + the benign 'message is not modified' error); otherwise
+    send a fresh message. Centralizes the edit-vs-reply pattern used across handlers."""
+    body = text if text is not None else tr(context, key, **variables)
+    query = update.callback_query
+    if query is not None:
+        m = query.message
+        try:
+            if isinstance(m, Message) and m.photo:
+                await m.edit_caption(caption=body, reply_markup=reply_markup, parse_mode="Markdown")
+            else:
+                await query.edit_message_text(body, reply_markup=reply_markup, parse_mode="Markdown",
+                                              disable_web_page_preview=disable_preview)
+            return
+        except BadRequest as exc:
+            if "not modified" in str(exc).lower():
+                return
+            # otherwise fall through to a fresh send (stale/uneditable message)
+    msg = update.effective_message
+    if msg is not None:
+        await msg.reply_text(body, parse_mode="Markdown", reply_markup=reply_markup,
+                             disable_web_page_preview=disable_preview)
+
+
+# ── inline-keyboard helpers ─────────────────────────────────────────────────────
+
+def dashboard_button(context: ContextTypes.DEFAULT_TYPE) -> InlineKeyboardButton:
+    return InlineKeyboardButton(tr(context, "bot.nav.home"), callback_data="menu:home")
+
+
+def back_button(context: ContextTypes.DEFAULT_TYPE) -> InlineKeyboardButton:
+    return InlineKeyboardButton(tr(context, "bot.nav.back"), callback_data="menu:home")
+
+
+def with_nav(context: ContextTypes.DEFAULT_TYPE, rows=None) -> InlineKeyboardMarkup:
+    """Append a [🏠 Dashboard] navigation row to the given keyboard rows so no
+    screen is a dead-end."""
+    out = [list(r) for r in (rows or [])]
+    out.append([dashboard_button(context)])
+    return InlineKeyboardMarkup(out)
+
+
+def short(value: str | None, head: int = 8, tail: int = 0) -> str:
+    """Shorten a long id/address. One implementation for every handler:
+    ``short(tok)`` → 'abcd1234…'; ``short(addr, 6, 4)`` → '0x1234…cdef'."""
+    if not value or len(value) <= head + tail + 1:
+        return value or ""
+    return f"{value[:head]}…{value[-tail:]}" if tail else f"{value[:head]}…"
+
+
+# ── callback_data index stash (works around Telegram's 64-byte callback limit) ──
+
+def stash(context: ContextTypes.DEFAULT_TYPE, key: str, payloads: list) -> list[str]:
+    """Store payloads under ``user_data[key]`` as an index→payload map; return the
+    string indices to embed in callback_data."""
+    m = {str(i): p for i, p in enumerate(payloads)}
+    context.user_data[key] = m
+    return list(m.keys())
+
+
+def from_stash(context: ContextTypes.DEFAULT_TYPE, key: str, idx) -> object | None:
+    """Resolve a stashed payload by index, or None if missing/expired."""
+    return (context.user_data.get(key) or {}).get(str(idx))

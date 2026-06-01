@@ -26,8 +26,8 @@ from polymarket.credentials import NoAccountConnected, TradingUnavailable
 logger = logging.getLogger(__name__)
 
 
-def _short(token: str) -> str:
-    return f"{token[:8]}…" if token and len(token) > 10 else token
+def _short(token: str) -> str:  # thin alias — single implementation lives in common.short
+    return common.short(token)
 
 
 def _floats(args: list[str], n: int) -> list[float] | None:
