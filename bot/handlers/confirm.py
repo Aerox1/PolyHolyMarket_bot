@@ -236,7 +236,9 @@ def _notional_usd(intent: dict) -> float:
     """Best-effort USD notional for the volume leaderboard."""
     kind = intent.get("kind")
     if kind == "market":
-        return float(intent.get("amount") or 0)
+        # market BUY amount is USD; market SELL amount is a SHARE count (no USD
+        # notional available here) — treat like close: counts as a bet, $0 volume.
+        return float(intent.get("amount") or 0) if intent.get("side") == "buy" else 0.0
     if kind == "limit":
         return float(intent.get("price") or 0) * float(intent.get("size") or 0)
     return 0.0  # close/sell by shares — counts as a bet, no USD notional

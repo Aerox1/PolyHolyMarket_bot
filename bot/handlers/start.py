@@ -11,6 +11,7 @@ import asyncio
 import logging
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Message, Update, WebAppInfo
+from telegram.error import BadRequest
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes
 
 from bot.handlers import common, discover, inquiry
@@ -105,11 +106,21 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE, *, 
         # caption; otherwise edit the text. Telegram won't convert between the two.
         # ``message`` may be an InaccessibleMessage (stale callback >48h) with no
         # .photo attr — isinstance guard falls through to edit via the query.
-        if isinstance(msg, Message) and msg.photo:
-            await msg.edit_caption(caption=text, reply_markup=kb, parse_mode="Markdown")
-        else:
-            await update.callback_query.edit_message_text(text, reply_markup=kb, parse_mode="Markdown",
-                                                           disable_web_page_preview=True)
+        try:
+            if isinstance(msg, Message) and msg.photo:
+                await msg.edit_caption(caption=text, reply_markup=kb, parse_mode="Markdown")
+            else:
+                await update.callback_query.edit_message_text(text, reply_markup=kb, parse_mode="Markdown",
+                                                              disable_web_page_preview=True)
+        except BadRequest as exc:
+            # "message is not modified" → a no-op Refresh on identical content; ignore.
+            # Any other edit failure (stale/uneditable) → send a fresh dashboard
+            # instead of bubbling up to on_menu's generic-error reply.
+            if "not modified" in str(exc).lower():
+                return
+            if update.effective_message is not None:
+                await update.effective_message.reply_text(text, reply_markup=kb, parse_mode="Markdown",
+                                                          disable_web_page_preview=True)
         return
 
     if update.effective_message is None:
