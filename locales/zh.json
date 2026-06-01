@@ -96,20 +96,23 @@
       "bad_number": "⚠️ 请提供有效的数字。",
       "placing": "⏳ 正在提交您的订单…",
       "sell_pct": "卖出 {pct}%",
-      "close_full": "平仓"
+      "close_full": "平仓",
+      "cancel_one": "✖ #{n}",
+      "cancel_all_btn": "🗑 全部取消"
     },
     "confirm": {
       "buy": "确认 *买入* {size} 份 `{token}`，价格 ${price}？",
       "sell": "确认 *卖出* {size} 份 `{token}`，价格 ${price}？",
       "marketbuy": "确认 *市价买入* ${amount} 的 `{token}`？",
       "marketsell": "确认 *市价卖出* {amount} 份 `{token}`？",
-      "close": "确认 *平掉* 您在 `{token}` 的全部持仓？",
+      "close": "确认 *平仓* {title} — {shares} 份（≈ ${est}）？",
       "cancel_all": "⚠️ 确认 *取消全部* 未成交订单？此操作无法撤销。",
       "yes": "✅ 确认",
       "no": "❌ 取消",
       "expired": "⌛ 此确认已过期。请重新执行该命令。",
       "aborted": "已取消——未提交任何订单。",
-      "cancel": "取消订单 `{order_id}`？"
+      "cancel": "取消订单 `{order_id}`？",
+      "sell_pos": "确认 *卖出 {pct}%* {title} — {shares} 份（≈ ${est}）？"
     },
     "order": {
       "placed": "✅ 订单已提交。\nID：`{order_id}`\n状态：{status}",

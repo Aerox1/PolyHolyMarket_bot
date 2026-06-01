@@ -96,20 +96,23 @@
       "bad_number": "⚠️ لطفاً اعداد معتبر وارد کنید.",
       "placing": "⏳ در حال ثبت سفارش شما…",
       "sell_pct": "فروش {pct}%",
-      "close_full": "بستن موقعیت"
+      "close_full": "بستن موقعیت",
+      "cancel_one": "✖ #{n}",
+      "cancel_all_btn": "🗑 لغو همه"
     },
     "confirm": {
       "buy": "تأیید *خرید* {size} از `{token}` با قیمت ${price}؟",
       "sell": "تأیید *فروش* {size} از `{token}` با قیمت ${price}؟",
       "marketbuy": "تأیید *خرید بازاری* ${amount} از `{token}`؟",
       "marketsell": "تأیید *فروش بازاری* {amount} سهم از `{token}`؟",
-      "close": "تأیید *بستن* کل موقعیت شما در `{token}`؟",
+      "close": "تأیید *بستن* {title} — {shares} سهم (≈ ${est})؟",
       "cancel_all": "⚠️ تأیید *لغو همهٔ* سفارش‌های باز؟ این کار قابل بازگشت نیست.",
       "yes": "✅ تأیید",
       "no": "❌ لغو",
       "expired": "⌛ این تأیید منقضی شد. لطفاً دستور را دوباره اجرا کنید.",
       "aborted": "لغو شد — هیچ سفارشی ثبت نشد.",
-      "cancel": "سفارش `{order_id}` لغو شود؟"
+      "cancel": "سفارش `{order_id}` لغو شود؟",
+      "sell_pos": "تأیید *فروش {pct}٪* از {title} — {shares} سهم (≈ ${est})؟"
     },
     "order": {
       "placed": "✅ سفارش ثبت شد.\nشناسه: `{order_id}`\nوضعیت: {status}",

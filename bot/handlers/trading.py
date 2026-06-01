@@ -105,12 +105,16 @@ async def close(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await common.reply(update, context, "bot.error.generic")
         return
 
-    size = _position_size(positions, token)
+    row = _position_row(positions, token)
+    size = _to_float((row or {}).get("size"))
     if size <= 0:
         await common.reply(update, context, "bot.inquiry.no_positions")
         return
-    intent = confirm.make_intent("close", side="sell", token_id=token, size=size)
-    await confirm.request(update, context, intent, "bot.confirm.close", token=_short(token))
+    title = (row.get("title") or row.get("outcome") or token) if row else token
+    est = _to_float((row or {}).get("currentValue"))
+    intent = confirm.make_intent("close", side="sell", token_id=token, size=size, title=title)
+    await confirm.request(update, context, intent, "bot.confirm.close",
+                          title=common.md_safe(title, 60), shares=f"{size:g}", est=f"{est:,.2f}")
 
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -127,22 +131,25 @@ async def cancelall(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await confirm.request(update, context, intent, "bot.confirm.cancel_all")
 
 
-def _position_size(positions, token: str) -> float:
+def _position_row(positions, token: str) -> dict | None:
     rows = positions
     if isinstance(positions, dict):
         rows = positions.get("data") or positions.get("positions") or []
     if not isinstance(rows, list):
-        return 0.0
+        return None
     for row in rows:
-        if not isinstance(row, dict):
-            continue
-        tid = row.get("asset") or row.get("token_id") or row.get("tokenId")
-        if tid == token:
-            try:
-                return float(row.get("size") or 0)
-            except (TypeError, ValueError):
-                return 0.0
-    return 0.0
+        if isinstance(row, dict):
+            tid = row.get("asset") or row.get("token_id") or row.get("tokenId")
+            if tid == token:
+                return row
+    return None
+
+
+def _to_float(value) -> float:
+    try:
+        return float(value or 0)
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def register(application: Application) -> None:

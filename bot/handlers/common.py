@@ -93,6 +93,16 @@ def esc(value) -> str:
     return html.escape("" if value is None else str(value), quote=False)
 
 
+_MD_STRIP = str.maketrans({c: None for c in "*_`[]"})
+
+
+def md_safe(value, limit: int | None = None) -> str:
+    """Make dynamic text safe to drop into a legacy-Markdown string by removing the
+    chars Telegram's legacy Markdown can't escape. Use for titles in confirm prompts."""
+    s = ("" if value is None else str(value)).translate(_MD_STRIP).strip()
+    return s[:limit] if limit else s
+
+
 async def screen(update: Update, context: ContextTypes.DEFAULT_TYPE, *, text: str,
                  reply_markup=None, parse_mode: str = "HTML", disable_preview: bool = True) -> None:
     """Render a text 'screen'. From a callback on a TEXT message, edits it in place
@@ -130,6 +140,14 @@ def with_nav(context: ContextTypes.DEFAULT_TYPE, rows=None) -> InlineKeyboardMar
     out = [list(r) for r in (rows or [])]
     out.append([dashboard_button(context)])
     return InlineKeyboardMarkup(out)
+
+
+def connect_keyboard(context: ContextTypes.DEFAULT_TYPE) -> InlineKeyboardMarkup:
+    """[🔗 Connect][🏠 Dashboard] — shown on the 'no account connected' state."""
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton(tr(context, "bot.menu.connect"), callback_data="menu:connect"),
+        dashboard_button(context),
+    ]])
 
 
 def short(value: str | None, head: int = 8, tail: int = 0) -> str:

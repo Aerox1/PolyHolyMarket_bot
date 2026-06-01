@@ -96,20 +96,23 @@
       "bad_number": "⚠️ Please provide valid numbers.",
       "placing": "⏳ Placing your order…",
       "sell_pct": "Sell {pct}%",
-      "close_full": "Close position"
+      "close_full": "Close position",
+      "cancel_one": "✖ #{n}",
+      "cancel_all_btn": "🗑 Cancel all"
     },
     "confirm": {
       "buy": "Confirm *BUY* {size} of `{token}` @ ${price}?",
       "sell": "Confirm *SELL* {size} of `{token}` @ ${price}?",
       "marketbuy": "Confirm *MARKET BUY* ${amount} of `{token}`?",
       "marketsell": "Confirm *MARKET SELL* {amount} shares of `{token}`?",
-      "close": "Confirm *CLOSE* your full position in `{token}`?",
+      "close": "Confirm *CLOSE* {title} — {shares} shares (≈ ${est})?",
       "cancel_all": "⚠️ Confirm *CANCEL ALL* open orders? This cannot be undone.",
       "yes": "✅ Confirm",
       "no": "❌ Cancel",
       "expired": "⌛ This confirmation expired. Please run the command again.",
       "aborted": "Cancelled — no order was placed.",
-      "cancel": "Cancel order `{order_id}`?"
+      "cancel": "Cancel order `{order_id}`?",
+      "sell_pos": "Confirm *SELL {pct}%* of {title} — {shares} shares (≈ ${est})?"
     },
     "order": {
       "placed": "✅ Order placed.\nID: `{order_id}`\nStatus: {status}",

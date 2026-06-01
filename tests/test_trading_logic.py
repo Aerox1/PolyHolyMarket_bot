@@ -29,18 +29,23 @@ def test_result_order_id_variants():
     assert confirm._result_order_id("x") is None
 
 
-def test_position_size_finds_token_across_shapes():
-    # list form
+def test_position_row_finds_token_across_shapes():
     rows = [{"asset": "0xTOK", "size": "12.5"}, {"asset": "0xOTHER", "size": "1"}]
-    assert trading._position_size(rows, "0xTOK") == 12.5
+
+    def size(positions, tok):
+        return trading._to_float((trading._position_row(positions, tok) or {}).get("size"))
+
+    # list form
+    assert size(rows, "0xTOK") == 12.5
     # wrapped under data
-    assert trading._position_size({"data": rows}, "0xTOK") == 12.5
+    assert size({"data": rows}, "0xTOK") == 12.5
     # wrapped under positions, alt key tokenId
-    assert trading._position_size({"positions": [{"tokenId": "0xZ", "size": 3}]}, "0xZ") == 3.0
-    # not found
-    assert trading._position_size(rows, "0xMISSING") == 0.0
-    # malformed
-    assert trading._position_size("garbage", "0xTOK") == 0.0
+    assert size({"positions": [{"tokenId": "0xZ", "size": 3}]}, "0xZ") == 3.0
+    # not found / malformed -> no row -> 0.0
+    assert size(rows, "0xMISSING") == 0.0
+    assert size("garbage", "0xTOK") == 0.0
+    # the row helper returns the full dict (so callers can read title/value too)
+    assert trading._position_row(rows, "0xTOK")["size"] == "12.5"
 
 
 def test_floats_parser():

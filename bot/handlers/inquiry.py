@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes
 
-from bot.handlers import common
+from bot.handlers import common, confirm
 from polymarket.credentials import NoAccountConnected, TradingUnavailable
 
 logger = logging.getLogger(__name__)
@@ -95,19 +95,20 @@ def _as_rows(data) -> list[dict]:
 _XLINKS = [("📊", "portfolio"), ("📈", "positions"), ("📋", "orders"), ("🧾", "trades"), ("🕑", "activity")]
 
 
-def _nav(context: ContextTypes.DEFAULT_TYPE, current: str) -> InlineKeyboardMarkup:
-    """[cross-links] + [↻ Refresh current] [🏠 Dashboard]."""
+def _nav_rows(context: ContextTypes.DEFAULT_TYPE, current: str) -> list:
+    """The cross-link row + [↻ Refresh current][🏠 Dashboard] row, as a list of rows."""
     xrow = [InlineKeyboardButton(emoji, callback_data=f"inq:{c}") for emoji, c in _XLINKS]
     bottom = [InlineKeyboardButton(common.tr(context, "bot.tile.refresh"), callback_data=f"inq:{current}"),
               common.dashboard_button(context)]
-    return InlineKeyboardMarkup([xrow, bottom])
+    return [xrow, bottom]
+
+
+def _nav(context: ContextTypes.DEFAULT_TYPE, current: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(_nav_rows(context, current))
 
 
 def _connect_kb(context: ContextTypes.DEFAULT_TYPE) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([[
-        InlineKeyboardButton(common.tr(context, "bot.menu.connect"), callback_data="menu:connect"),
-        common.dashboard_button(context),
-    ]])
+    return common.connect_keyboard(context)
 
 
 def _empty_kb(context: ContextTypes.DEFAULT_TYPE) -> InlineKeyboardMarkup:
@@ -314,6 +315,7 @@ async def orders(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await common.reply(update, context, "bot.inquiry.no_orders", reply_markup=_empty_kb(context))
         return
 
+    order_ids: list[str] = []
     lines = [_hhead(context, "bot.inquiry.orders_header"), ""]
     for o in rows[:_MAX_ROWS]:
         oid = str(o.get("id", "?"))
@@ -322,15 +324,25 @@ async def orders(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         size = _fmt_money(o.get("original_size") or o.get("size"))
         token = o.get("asset_id") or o.get("market") or "?"
         emoji = "🟩" if side == "BUY" else "🟥"
+        n = len(order_ids) + 1
+        order_ids.append(oid)
         lines.append(
-            f"{emoji} <code>{common.esc(_shorten(oid, 12))}</code>\n"
+            f"{emoji} <b>#{n}</b> <code>{common.esc(_shorten(oid, 12))}</code>\n"
             f"  {common.esc(side)} | ${price} × {size}\n"
             f"  <code>{common.esc(_shorten(token))}</code>"
         )
     if len(rows) > _MAX_ROWS:
         note = common.tr(context, "bot.inquiry.showing", n=_MAX_ROWS, total=len(rows)).replace("_", "")
         lines += ["", f"<i>{common.esc(note)}</i>"]
-    await common.screen(update, context, text="\n".join(lines), reply_markup=_nav(context, "orders"))
+
+    # Per-order ✖ Cancel buttons (id stashed by index) + 🗑 Cancel all, then the nav rows.
+    common.stash(context, "open_orders", order_ids)
+    cancel_btns = [InlineKeyboardButton(common.tr(context, "bot.trade.cancel_one", n=i + 1),
+                                        callback_data=f"ocancel:{i}") for i in range(len(order_ids))]
+    btn_rows = [cancel_btns[j:j + 3] for j in range(0, len(cancel_btns), 3)]
+    btn_rows.append([InlineKeyboardButton(common.tr(context, "bot.trade.cancel_all_btn"), callback_data="ocancelall")])
+    await common.screen(update, context, text="\n".join(lines),
+                        reply_markup=InlineKeyboardMarkup(btn_rows + _nav_rows(context, "orders")))
 
 
 # ── /trades ──────────────────────────────────────────────────────────────────
@@ -588,12 +600,33 @@ async def on_inq(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await fn(update, context)
 
 
+async def on_order_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Cancel one order (✖ #n) or all (🗑) from the /orders screen, via confirm.py."""
+    query = update.callback_query
+    if query is None:
+        return
+    await query.answer()
+    data = query.data or ""
+    if data == "ocancelall":
+        await confirm.request(update, context, confirm.make_intent("cancel_all"), "bot.confirm.cancel_all")
+        return
+    idx = data.split(":", 1)[1] if ":" in data else ""
+    oid = common.from_stash(context, "open_orders", idx)
+    if not oid:
+        await common.reply(update, context, "bot.confirm.expired")
+        return
+    intent = confirm.make_intent("cancel", order_id=str(oid))
+    await confirm.request(update, context, intent, "bot.confirm.cancel", order_id=common.short(str(oid), 12))
+
+
 # ── registration ─────────────────────────────────────────────────────────────
 
 def register(application: Application) -> None:
     """Add all read-only inquiry + market-data command handlers."""
     application.add_handler(CallbackQueryHandler(
         on_inq, pattern="^inq:(portfolio|positions|balance|orders|trades|activity)$"))
+    application.add_handler(CallbackQueryHandler(on_order_cancel, pattern="^ocancel:"))
+    application.add_handler(CallbackQueryHandler(on_order_cancel, pattern="^ocancelall$"))
     application.add_handler(CommandHandler("portfolio", portfolio))
     application.add_handler(CommandHandler("positions", positions))
     application.add_handler(CommandHandler("balance", balance))

@@ -70,7 +70,13 @@ async def request(update: Update, context: ContextTypes.DEFAULT_TYPE, intent: di
         return
 
     intent["ts"] = time.time()
-    always_confirm = intent.get("kind") == "cancel_all"
+    kind = intent.get("kind")
+    # Always confirm anything that closes/spends a position, even if the user turned
+    # per-trade confirmation off: cancel-all, full closes, and market sells.
+    always_confirm = (
+        kind in ("cancel_all", "close")
+        or (kind == "market" and intent.get("side") == "sell")
+    )
     if not always_confirm and not await _wants_confirmation(user_id):
         await _execute(update, context, intent)
         return
@@ -92,7 +98,8 @@ async def on_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     intent_id = (query.data or "").split(":", 1)[1] if ":" in (query.data or "") else ""
     intent = (context.user_data.get("pending_orders") or {}).pop(intent_id, None)
     if not intent or (time.time() - intent.get("ts", 0)) > _TTL_SECONDS:
-        await query.edit_message_text(common.tr(context, "bot.confirm.expired"))
+        await query.edit_message_text(common.tr(context, "bot.confirm.expired"),
+                                      reply_markup=common.with_nav(context))
         return
     await _execute(update, context, intent, query=query)
 
@@ -102,7 +109,8 @@ async def on_decline(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     await query.answer()
     intent_id = (query.data or "").split(":", 1)[1] if ":" in (query.data or "") else ""
     (context.user_data.get("pending_orders") or {}).pop(intent_id, None)
-    await query.edit_message_text(common.tr(context, "bot.confirm.aborted"))
+    await query.edit_message_text(common.tr(context, "bot.confirm.aborted"),
+                                  reply_markup=common.with_nav(context))
 
 
 # ── execution ─────────────────────────────────────────────────────────────────
@@ -126,12 +134,12 @@ def _result_order_id(result) -> str | None:
 async def _execute(update: Update, context: ContextTypes.DEFAULT_TYPE, intent: dict, query=None) -> None:
     user_id = common.db_user_id(context)
 
-    async def respond(key: str, **kw) -> None:
+    async def respond(key: str, markup=None, **kw) -> None:
         text = common.tr(context, key, **kw)
         if query is not None:
-            await query.edit_message_text(text, parse_mode="Markdown")
+            await query.edit_message_text(text, parse_mode="Markdown", reply_markup=markup)
         elif update.effective_message is not None:
-            await update.effective_message.reply_text(text, parse_mode="Markdown")
+            await update.effective_message.reply_text(text, parse_mode="Markdown", reply_markup=markup)
 
     try:
         pm = await common.manager(context).get_trading_client(user_id)
@@ -176,7 +184,7 @@ async def _execute(update: Update, context: ContextTypes.DEFAULT_TYPE, intent: d
         await _audit(AuditEvent.ORDER_ERROR, user_id, account_id, {"kind": kind, "error": type(exc).__name__})
         if kind in ("limit", "market", "close") and account_id is not None:
             await _log_order(account_id, intent, status="rejected", error=type(exc).__name__)
-        await respond("bot.order.failed")
+        await respond("bot.order.failed", markup=common.with_nav(context))
         return
 
     # ── interpret result ──
@@ -184,12 +192,12 @@ async def _execute(update: Update, context: ContextTypes.DEFAULT_TYPE, intent: d
         cancel_ok = _result_ok(result)
         await _audit(AuditEvent.CANCEL_RESULT, user_id, account_id, {"kind": kind, "ok": cancel_ok})
         if not cancel_ok:
-            await respond("bot.order.failed")
+            await respond("bot.order.failed", markup=common.with_nav(context))
         elif kind == "cancel":
-            await respond("bot.order.cancelled", order_id=intent.get("order_id", ""))
+            await respond("bot.order.cancelled", markup=common.with_nav(context), order_id=intent.get("order_id", ""))
         else:
             count = len(result.get("canceled", [])) if isinstance(result, dict) else 0
-            await respond("bot.order.cancelled_all", count=count)
+            await respond("bot.order.cancelled_all", markup=common.with_nav(context), count=count)
         return
 
     ok = _result_ok(result)
@@ -204,12 +212,13 @@ async def _execute(update: Update, context: ContextTypes.DEFAULT_TYPE, intent: d
         await _record_activity(user_id, intent)
 
     if not ok:
-        await respond("bot.order.failed")
+        await respond("bot.order.failed", markup=common.with_nav(context))
     elif kind == "close":
-        await respond("bot.order.closed", token=_short(token))
+        await respond("bot.order.closed", markup=common.with_nav(context), token=_short(token))
     else:
         status = result.get("status", "") if isinstance(result, dict) else ""
-        await respond("bot.order.placed", order_id=order_id or "—", status=status or "submitted")
+        await respond("bot.order.placed", markup=common.with_nav(context),
+                      order_id=order_id or "—", status=status or "submitted")
 
 
 # ── small helpers ───────────────────────────────────────────────────────────
