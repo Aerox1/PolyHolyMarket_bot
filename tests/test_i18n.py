@@ -78,6 +78,22 @@ def test_placeholder_parity_across_locales():
                 )
 
 
+def test_markdown_entities_balanced():
+    """Every bot.* string must have balanced Markdown *bold* / _italic_ markers
+    (after removing `code` spans and {placeholders}, which aren't parsed), so a
+    parse_mode=Markdown send never fails with 'can't parse entities'. Regression
+    guard for command-syntax tokens like <token_id> that left a dangling _."""
+    i18n._load()
+    strip = lambda s: re.sub(r"\{[^}]*\}", "", re.sub(r"`[^`]*`", "", s))
+    for lang in ("en", "fa", "ru", "zh"):
+        for key, val in _flat(i18n._CATALOGS[lang]).items():
+            if not key.startswith("bot.") or not isinstance(val, str):
+                continue
+            s = strip(val)
+            assert s.count("_") % 2 == 0, f"{lang} '{key}': unbalanced _ (would break Markdown)"
+            assert s.count("*") % 2 == 0, f"{lang} '{key}': unbalanced * (would break Markdown)"
+
+
 def test_normalize_unknown_lang_defaults_to_en():
     assert i18n.normalize_lang("xx") == "en"
     assert i18n.normalize_lang(None) == "en"

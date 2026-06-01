@@ -9,7 +9,7 @@
       "choose_language": "🌐 请选择您的语言：",
       "language_set": "✅ 语言已切换为中文。",
       "menu_prompt": "您想做什么？",
-      "help_text": "ℹ️ *帮助*\n\n*开始使用*\n/start — 打开主菜单\n/connect — 连接 Polymarket 钱包\n/disconnect — 移除已连接的钱包\n\n*账户与市场*\n/portfolio — 投资组合概览\n/positions — 持仓\n/balance — USDC 余额\n/orders — 未成交订单\n/trades — 近期成交\n/activity — 近期动态\n/search <query> — 搜索市场\n/market <condition_id> — 市场详情\n/price <token_id> — 当前价格\n/book <token_id> — 订单簿\n\n您的钱包凭据已加密，绝不会被分享。使用 /cancel 可中止任何步骤。"
+      "help_text": "ℹ️ *帮助*\n\n*开始使用*\n/start — 打开主菜单\n/connect — 连接 Polymarket 钱包\n/disconnect — 移除已连接的钱包\n\n*账户与市场*\n/portfolio — 投资组合概览\n/positions — 持仓\n/balance — USDC 余额\n/orders — 未成交订单\n/trades — 近期成交\n/activity — 近期动态\n/search <query> — 搜索市场\n/market <id> — 市场详情\n/price <token> — 当前价格\n/book <token> — 订单簿\n\n您的钱包凭据已加密，绝不会被分享。使用 /cancel 可中止任何步骤。"
     },
     "menu": {
       "connect": "🔗 连接账户",
@@ -78,9 +78,9 @@
       "no_results": "未找到与“{query}”相关的市场。",
       "results_header": "🔎 *匹配“{query}”的市场：*",
       "price": "💵 {outcome}：${price}",
-      "market_usage": "用法：/market <condition_id>",
-      "price_usage": "用法：/price <token_id>",
-      "book_usage": "用法：/book <token_id>",
+      "market_usage": "用法：/market <id>",
+      "price_usage": "用法：/price <token>",
+      "book_usage": "用法：/book <token>",
       "detail": "📈 *{question}*\n\n结果：{outcomes}\n价格：{prices}\n交易量：${volume}\n流动性：${liquidity}\n截止：{end_date}\n代币：`{tokens}`",
       "price_detail": "💲 *价格* `{token}`\n\n最优买价：${bid}\n最优卖价：${ask}\n中间价：${mid}\n价差：{spread}",
       "book_header": "📗 *订单簿* `{token}`",
@@ -91,12 +91,12 @@
       "not_found": "未找到市场——可能已关闭或 id 有误。"
     },
     "trade": {
-      "buy_usage": "用法：/buy <token_id> <price> <size>",
-      "sell_usage": "用法：/sell <token_id> <price> <size>",
-      "marketbuy_usage": "用法：/marketbuy <token_id> <amount_usd>",
-      "marketsell_usage": "用法：/marketsell <token_id> <shares>",
-      "cancel_usage": "用法：/cancel <order_id>",
-      "close_usage": "用法：/close <token_id>",
+      "buy_usage": "用法：/buy <token> <price> <size>",
+      "sell_usage": "用法：/sell <token> <price> <size>",
+      "marketbuy_usage": "用法：/marketbuy <token> <usd>",
+      "marketsell_usage": "用法：/marketsell <token> <shares>",
+      "cancel_usage": "用法：/cancel <order>",
+      "close_usage": "用法：/close <token>",
       "bad_number": "⚠️ 请提供有效的数字。",
       "placing": "⏳ 正在提交您的订单…",
       "sell_pct": "卖出 {pct}%",

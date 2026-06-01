@@ -9,7 +9,7 @@
       "choose_language": "🌐 لطفاً زبان خود را انتخاب کنید:",
       "language_set": "✅ زبان روی فارسی تنظیم شد.",
       "menu_prompt": "می‌خواهید چه کاری انجام دهید؟",
-      "help_text": "ℹ️ *راهنما*\n\n*شروع به کار*\n/start — باز کردن منوی اصلی\n/connect — اتصال کیف پول Polymarket\n/disconnect — حذف کیف پول متصل‌شده\n\n*حساب و بازارها*\n/portfolio — خلاصهٔ پرتفوی\n/positions — موقعیت‌های باز\n/balance — موجودی USDC\n/orders — سفارش‌های باز\n/trades — معاملات اخیر\n/activity — فعالیت اخیر\n/search <query> — جستجوی بازارها\n/market <condition_id> — جزئیات بازار\n/price <token_id> — قیمت‌های فعلی\n/book <token_id> — دفتر سفارش\n\nاطلاعات کیف پول شما رمزنگاری می‌شود و هرگز به اشتراک گذاشته نمی‌شود. برای لغو هر مرحله از /cancel استفاده کنید."
+      "help_text": "ℹ️ *راهنما*\n\n*شروع به کار*\n/start — باز کردن منوی اصلی\n/connect — اتصال کیف پول Polymarket\n/disconnect — حذف کیف پول متصل‌شده\n\n*حساب و بازارها*\n/portfolio — خلاصهٔ پرتفوی\n/positions — موقعیت‌های باز\n/balance — موجودی USDC\n/orders — سفارش‌های باز\n/trades — معاملات اخیر\n/activity — فعالیت اخیر\n/search <query> — جستجوی بازارها\n/market <id> — جزئیات بازار\n/price <token> — قیمت‌های فعلی\n/book <token> — دفتر سفارش\n\nاطلاعات کیف پول شما رمزنگاری می‌شود و هرگز به اشتراک گذاشته نمی‌شود. برای لغو هر مرحله از /cancel استفاده کنید."
     },
     "menu": {
       "connect": "🔗 اتصال حساب",
@@ -78,9 +78,9 @@
       "no_results": "هیچ بازاری برای «{query}» یافت نشد.",
       "results_header": "🔎 *بازارهای منطبق با «{query}»:*",
       "price": "💵 {outcome}: ${price}",
-      "market_usage": "نحوهٔ استفاده: /market <condition_id>",
-      "price_usage": "نحوهٔ استفاده: /price <token_id>",
-      "book_usage": "نحوهٔ استفاده: /book <token_id>",
+      "market_usage": "نحوهٔ استفاده: /market <id>",
+      "price_usage": "نحوهٔ استفاده: /price <token>",
+      "book_usage": "نحوهٔ استفاده: /book <token>",
       "detail": "📈 *{question}*\n\nنتایج: {outcomes}\nقیمت‌ها: {prices}\nحجم: ${volume}\nنقدینگی: ${liquidity}\nپایان: {end_date}\nتوکن‌ها: `{tokens}`",
       "price_detail": "💲 *قیمت* `{token}`\n\nبهترین خرید: ${bid}\nبهترین فروش: ${ask}\nنقطهٔ میانی: ${mid}\nاسپرد: {spread}",
       "book_header": "📗 *دفتر سفارش* `{token}`",
@@ -91,12 +91,12 @@
       "not_found": "مارکت پیدا نشد — ممکن است بسته شده باشد یا شناسه اشتباه است."
     },
     "trade": {
-      "buy_usage": "نحوهٔ استفاده: /buy <token_id> <price> <size>",
-      "sell_usage": "نحوهٔ استفاده: /sell <token_id> <price> <size>",
-      "marketbuy_usage": "نحوهٔ استفاده: /marketbuy <token_id> <amount_usd>",
-      "marketsell_usage": "نحوهٔ استفاده: /marketsell <token_id> <shares>",
-      "cancel_usage": "نحوهٔ استفاده: /cancel <order_id>",
-      "close_usage": "نحوهٔ استفاده: /close <token_id>",
+      "buy_usage": "نحوهٔ استفاده: /buy <token> <price> <size>",
+      "sell_usage": "نحوهٔ استفاده: /sell <token> <price> <size>",
+      "marketbuy_usage": "نحوهٔ استفاده: /marketbuy <token> <usd>",
+      "marketsell_usage": "نحوهٔ استفاده: /marketsell <token> <shares>",
+      "cancel_usage": "نحوهٔ استفاده: /cancel <order>",
+      "close_usage": "نحوهٔ استفاده: /close <token>",
       "bad_number": "⚠️ لطفاً اعداد معتبر وارد کنید.",
       "placing": "⏳ در حال ثبت سفارش شما…",
       "sell_pct": "فروش {pct}%",

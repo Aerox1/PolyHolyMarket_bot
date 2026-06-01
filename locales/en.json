@@ -9,7 +9,7 @@
       "choose_language": "🌐 Please choose your language:",
       "language_set": "✅ Language set to English.",
       "menu_prompt": "What would you like to do?",
-      "help_text": "ℹ️ *Help*\n\n*Getting started*\n/start — open the main menu\n/connect — connect a Polymarket wallet\n/disconnect — remove a connected wallet\n\n*Account & markets*\n/portfolio — portfolio summary\n/positions — open positions\n/balance — USDC balance\n/orders — open orders\n/trades — recent trades\n/activity — recent activity\n/search <query> — find markets\n/market <condition_id> — market details\n/price <token_id> — current prices\n/book <token_id> — order book\n\nYour wallet credentials are encrypted and never shared. Use /cancel to abort any step."
+      "help_text": "ℹ️ *Help*\n\n*Getting started*\n/start — open the main menu\n/connect — connect a Polymarket wallet\n/disconnect — remove a connected wallet\n\n*Account & markets*\n/portfolio — portfolio summary\n/positions — open positions\n/balance — USDC balance\n/orders — open orders\n/trades — recent trades\n/activity — recent activity\n/search <query> — find markets\n/market <id> — market details\n/price <token> — current prices\n/book <token> — order book\n\nYour wallet credentials are encrypted and never shared. Use /cancel to abort any step."
     },
     "menu": {
       "connect": "🔗 Connect Account",
@@ -78,9 +78,9 @@
       "no_results": "No markets found for “{query}”.",
       "results_header": "🔎 *Markets matching “{query}”:*",
       "price": "💵 {outcome}: ${price}",
-      "market_usage": "Usage: /market <condition_id>",
-      "price_usage": "Usage: /price <token_id>",
-      "book_usage": "Usage: /book <token_id>",
+      "market_usage": "Usage: /market <id>",
+      "price_usage": "Usage: /price <token>",
+      "book_usage": "Usage: /book <token>",
       "detail": "📈 *{question}*\n\nOutcomes: {outcomes}\nPrices: {prices}\nVolume: ${volume}\nLiquidity: ${liquidity}\nEnds: {end_date}\nTokens: `{tokens}`",
       "price_detail": "💲 *Price* `{token}`\n\nBest bid: ${bid}\nBest ask: ${ask}\nMidpoint: ${mid}\nSpread: {spread}",
       "book_header": "📗 *Order book* `{token}`",
@@ -91,12 +91,12 @@
       "not_found": "Market not found — it may be closed or the id is wrong."
     },
     "trade": {
-      "buy_usage": "Usage: /buy <token_id> <price> <size>",
-      "sell_usage": "Usage: /sell <token_id> <price> <size>",
-      "marketbuy_usage": "Usage: /marketbuy <token_id> <amount_usd>",
-      "marketsell_usage": "Usage: /marketsell <token_id> <shares>",
-      "cancel_usage": "Usage: /cancel <order_id>",
-      "close_usage": "Usage: /close <token_id>",
+      "buy_usage": "Usage: /buy <token> <price> <size>",
+      "sell_usage": "Usage: /sell <token> <price> <size>",
+      "marketbuy_usage": "Usage: /marketbuy <token> <usd>",
+      "marketsell_usage": "Usage: /marketsell <token> <shares>",
+      "cancel_usage": "Usage: /cancel <order>",
+      "close_usage": "Usage: /close <token>",
       "bad_number": "⚠️ Please provide valid numbers.",
       "placing": "⏳ Placing your order…",
       "sell_pct": "Sell {pct}%",

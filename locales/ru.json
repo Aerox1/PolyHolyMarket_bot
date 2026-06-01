@@ -9,7 +9,7 @@
       "choose_language": "🌐 Пожалуйста, выберите язык:",
       "language_set": "✅ Язык переключён на русский.",
       "menu_prompt": "Что вы хотите сделать?",
-      "help_text": "ℹ️ *Помощь*\n\n*Начало работы*\n/start — открыть главное меню\n/connect — подключить кошелёк Polymarket\n/disconnect — удалить подключённый кошелёк\n\n*Аккаунт и рынки*\n/portfolio — сводка по портфелю\n/positions — открытые позиции\n/balance — баланс USDC\n/orders — открытые ордера\n/trades — недавние сделки\n/activity — недавняя активность\n/search <запрос> — поиск рынков\n/market <condition_id> — детали рынка\n/price <token_id> — текущие цены\n/book <token_id> — стакан заявок\n\nДанные вашего кошелька зашифрованы и никогда не передаются третьим лицам. Используйте /cancel, чтобы прервать любой шаг."
+      "help_text": "ℹ️ *Помощь*\n\n*Начало работы*\n/start — открыть главное меню\n/connect — подключить кошелёк Polymarket\n/disconnect — удалить подключённый кошелёк\n\n*Аккаунт и рынки*\n/portfolio — сводка по портфелю\n/positions — открытые позиции\n/balance — баланс USDC\n/orders — открытые ордера\n/trades — недавние сделки\n/activity — недавняя активность\n/search <запрос> — поиск рынков\n/market <id> — детали рынка\n/price <token> — текущие цены\n/book <token> — стакан заявок\n\nДанные вашего кошелька зашифрованы и никогда не передаются третьим лицам. Используйте /cancel, чтобы прервать любой шаг."
     },
     "menu": {
       "connect": "🔗 Подключить аккаунт",
@@ -78,9 +78,9 @@
       "no_results": "По запросу «{query}» рынков не найдено.",
       "results_header": "🔎 *Рынки по запросу «{query}»:*",
       "price": "💵 {outcome}: ${price}",
-      "market_usage": "Использование: /market <condition_id>",
-      "price_usage": "Использование: /price <token_id>",
-      "book_usage": "Использование: /book <token_id>",
+      "market_usage": "Использование: /market <id>",
+      "price_usage": "Использование: /price <token>",
+      "book_usage": "Использование: /book <token>",
       "detail": "📈 *{question}*\n\nИсходы: {outcomes}\nЦены: {prices}\nОбъём: ${volume}\nЛиквидность: ${liquidity}\nЗавершение: {end_date}\nТокены: `{tokens}`",
       "price_detail": "💲 *Цена* `{token}`\n\nЛучший бид: ${bid}\nЛучший аск: ${ask}\nСередина: ${mid}\nСпред: {spread}",
       "book_header": "📗 *Стакан заявок* `{token}`",
@@ -91,12 +91,12 @@
       "not_found": "Рынок не найден — возможно, он закрыт или неверный id."
     },
     "trade": {
-      "buy_usage": "Использование: /buy <token_id> <price> <size>",
-      "sell_usage": "Использование: /sell <token_id> <price> <size>",
-      "marketbuy_usage": "Использование: /marketbuy <token_id> <amount_usd>",
-      "marketsell_usage": "Использование: /marketsell <token_id> <shares>",
-      "cancel_usage": "Использование: /cancel <order_id>",
-      "close_usage": "Использование: /close <token_id>",
+      "buy_usage": "Использование: /buy <token> <price> <size>",
+      "sell_usage": "Использование: /sell <token> <price> <size>",
+      "marketbuy_usage": "Использование: /marketbuy <token> <usd>",
+      "marketsell_usage": "Использование: /marketsell <token> <shares>",
+      "cancel_usage": "Использование: /cancel <order>",
+      "close_usage": "Использование: /close <token>",
       "bad_number": "⚠️ Пожалуйста, укажите корректные числа.",
       "placing": "⏳ Размещаю ваш ордер…",
       "sell_pct": "Продать {pct}%",
