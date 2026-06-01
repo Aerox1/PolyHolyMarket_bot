@@ -245,9 +245,12 @@ def _notional_usd(intent: dict) -> float:
 async def _record_activity(user_id: int, intent: dict) -> None:
     """Count a successful order toward the user's streak + totals."""
     try:
+        from db.repositories import rewards as rewards_repo
         from db.repositories import stats as stats_repo
+        amount = _notional_usd(intent)
         async with async_session_scope() as session:
-            await stats_repo.record_bet(session, user_id, _notional_usd(intent))
+            await stats_repo.record_bet(session, user_id, amount)
+            await rewards_repo.reward_for_bet(session, user_id, amount)
     except Exception as exc:  # noqa: BLE001 — gamification must never block a trade
         logger.warning("record_activity failed: %s", type(exc).__name__)
 

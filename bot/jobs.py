@@ -17,6 +17,7 @@ from db.engine import async_session_scope
 from db.models import User
 from db.repositories import bets as bets_repo
 from db.repositories import commands as commands_repo
+from db.repositories import rewards as rewards_repo
 from db.repositories import stats as stats_repo
 from polymarket import markets
 
@@ -90,6 +91,8 @@ async def settlement_job(context: ContextTypes.DEFAULT_TYPE) -> None:
                     bets_repo.apply_settlement(bet, vals)
                     await stats_repo.record_settlement(session, bet.user_id, status=vals["status"],
                                                        pnl=vals["pnl"], brier=vals["brier"])
+                    if vals["status"] == "WON":
+                        await rewards_repo.reward_for_win(session, bet.user_id)
                     user = await session.get(User, bet.user_id)
                     notif = (user.telegram_id, _settle_message(bet, vals, user.language)) if user else None
             except Exception:  # noqa: BLE001 — isolate one bad bet, keep settling the rest

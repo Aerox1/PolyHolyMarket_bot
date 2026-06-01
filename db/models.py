@@ -91,6 +91,9 @@ class User(Base):
     )
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     active_account_id: Mapped[int | None] = mapped_column(BigInteger)  # soft pointer; no FK to avoid cycle
+    # ── referral ──
+    referral_code: Mapped[str | None] = mapped_column(String(32), unique=True, index=True)
+    referred_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="SET NULL"))
 
     accounts: Mapped[list["Account"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     settings: Mapped["UserSettings | None"] = relationship(back_populates="user", cascade="all, delete-orphan", uselist=False)
@@ -385,6 +388,36 @@ class UserStats(Base):
         Index("ix_user_stats_bets", "total_bets"),
         Index("ix_user_stats_volume", "total_volume_usd"),
     )
+
+
+class PointsLedger(Base):
+    """Append-only points ledger — a user's balance is SUM(delta). No ad-hoc
+    balance writes, so points can never be lost or double-counted."""
+
+    __tablename__ = "points_ledger"
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    delta: Mapped[int] = mapped_column(Integer, nullable=False)
+    reason: Mapped[str] = mapped_column(String(32), nullable=False)   # bet|win|streak|signup|referral_l1|...
+    ref: Mapped[str | None] = mapped_column(String(64))               # e.g. bet id / invitee id
+    created_at: Mapped[datetime] = _now()
+
+    __table_args__ = (Index("ix_points_user", "user_id"),)
+
+
+class Referral(Base):
+    """A referral edge (inviter → invitee). Reward unlocks only after the invitee
+    completes real activity (conditional unlock = anti-fraud)."""
+
+    __tablename__ = "referrals"
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    inviter_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    invitee_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False)
+    status: Mapped[str] = mapped_column(String(12), default="pending", nullable=False)  # pending|unlocked
+    created_at: Mapped[datetime] = _now()
+    unlocked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class AppConfig(Base):

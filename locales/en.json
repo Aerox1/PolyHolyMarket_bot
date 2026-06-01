@@ -145,6 +145,31 @@
       "won": "🎉 *Your bet won!*\n{outcome} on “{q}”\nPayout ${payout}  ·  P&L +${pnl}",
       "lost": "❌ *Bet settled*\n{outcome} on “{q}” — lost ${amount}.",
       "void": "↩️ *Bet refunded*\nYour ${amount} on “{q}” was returned (market voided)."
+    },
+    "tile": {
+      "buy": "💵 Buy",
+      "sell": "💸 Sell",
+      "positions": "📈 Positions",
+      "orders": "📋 Orders",
+      "trending": "🔥 Trending",
+      "rewards": "💰 Rewards",
+      "watchlist": "⭐ Watchlist",
+      "play": "🎲 Play",
+      "accounts": "🔗 Wallet",
+      "settings": "⚙️ Settings",
+      "help": "ℹ️ Help",
+      "refresh": "↻ Refresh"
+    },
+    "dash": {
+      "connected": "💼 *Your account*\n`{wallet}`  _(tap to copy)_\nBalance: {balance}\n\n🔗 *Refer & earn*\n`{link}`\nFriends who join with your link unlock a bonus once they start betting.\n\nWhat would you like to do?",
+      "welcome": "👋 *Welcome, {name}!*\n\nConnect your Polymarket wallet to start trading and earning points.\n\n🔗 *Your referral link* (share to earn)\n`{link}`\n\nTap a tile below 👇",
+      "balance_hint": "tap ↻ Refresh",
+      "trade_hint": "To trade: open 🔥 Trending or 🎲 Play to pick a market, or use `/buy <token> <price> <size>` or `/marketbuy <token> <usd>`.",
+      "coming_soon": "⭐ Watchlist is coming soon.",
+      "play_hint": "🎲 The swipe game opens as a Mini App from the bot's menu button. (Set WEBAPP_BASE_URL on deploy and it opens right from this tile.)"
+    },
+    "rewards": {
+      "screen": "💰 *Rewards*\n\n⭐ *Your points:* {balance}\n\n*Referrals*\n• Direct: {direct} · Indirect: {indirect} · Active: {unlocked}\n• Points from referrals: {referral_points}\n\n*How it works*\nDescending multi-layer referral: {layers}. A friend must place {unlock_bets} bets to unlock — then you BOTH get {signup} points and you earn a share of their activity across layers.\n\n🔗 *Your referral link*\n`{link}`\nShare it — your friends get a welcome bonus too."
     }
   },
   "dash": {

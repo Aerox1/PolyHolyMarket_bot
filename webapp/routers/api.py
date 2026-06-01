@@ -21,6 +21,7 @@ from db.repositories import accounts as accounts_repo
 from db.repositories import bets as bets_repo
 from db.repositories import categories as categories_repo
 from db.repositories import orders as orders_repo
+from db.repositories import rewards as rewards_repo
 from db.repositories import stats as stats_repo
 from polymarket import markets
 from polymarket.credentials import NoAccountConnected, TradingUnavailable
@@ -197,6 +198,7 @@ async def place_bet(
     # Gamification: count the bet toward streak + totals, and record a settleable bet.
     try:
         await stats_repo.record_bet(db, user.id, amount)
+        await rewards_repo.reward_for_bet(db, user.id, amount)
         await bets_repo.create_bet(
             db, user_id=user.id, account_id=account_id, market_id=market_id, token_id=token,
             question=m.get("question"), outcome=outcome,
