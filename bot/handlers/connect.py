@@ -335,18 +335,53 @@ async def disconnect_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         ]
         for acc in accounts
     ]
-    if len(accounts) == 1:
-        prompt = common.tr(context, "bot.disconnect.confirm", wallet=accounts[0].wallet_address)
-    else:
-        prompt = common.tr(context, "bot.disconnect.choose")
     await update.effective_message.reply_text(
-        prompt,
+        common.tr(context, "bot.disconnect.choose"),
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(rows),
     )
 
 
 async def on_disconnect(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """First tap (disc:{id}) — ask for confirmation; deletion happens on discok:{id}."""
+    query = update.callback_query
+    await query.answer()
+    user_id = common.db_user_id(context)
+    if user_id is None:
+        await query.message.reply_text(common.tr(context, "bot.error.no_account"))
+        return
+    try:
+        account_id = int(query.data.split(":", 1)[1])
+    except (ValueError, IndexError):
+        await query.message.reply_text(common.tr(context, "bot.error.generic"))
+        return
+    try:
+        accounts = await common.manager(context).list_accounts(user_id)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Disconnect list failed: %s", type(exc).__name__)
+        await query.message.reply_text(common.tr(context, "bot.error.generic"))
+        return
+    acc = next((a for a in accounts if a.account_id == account_id), None)
+    if acc is None:
+        await query.edit_message_text(common.tr(context, "bot.disconnect.none"))
+        return
+    rows = [[
+        InlineKeyboardButton(common.tr(context, "bot.disconnect.yes"), callback_data=f"discok:{account_id}"),
+        InlineKeyboardButton(common.tr(context, "bot.confirm.no"), callback_data="discno"),
+    ]]
+    await query.edit_message_text(
+        common.tr(context, "bot.disconnect.confirm", wallet=_short(acc.wallet_address)),
+        parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(rows))
+
+
+async def on_disconnect_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+    await query.edit_message_text(common.tr(context, "bot.disconnect.cancelled"))
+
+
+async def on_disconnect_confirmed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Second tap (discok:{id}) — the actual, irreversible credential deletion."""
     query = update.callback_query
     await query.answer()
 
@@ -418,3 +453,5 @@ def register(application: Application) -> None:
     application.add_handler(conv)
     application.add_handler(CommandHandler("disconnect", disconnect_cmd))
     application.add_handler(CallbackQueryHandler(on_disconnect, pattern="^disc:"))
+    application.add_handler(CallbackQueryHandler(on_disconnect_confirmed, pattern="^discok:"))
+    application.add_handler(CallbackQueryHandler(on_disconnect_cancel, pattern="^discno$"))

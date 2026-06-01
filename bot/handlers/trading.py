@@ -17,10 +17,10 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from telegram import Update
+from telegram import InlineKeyboardButton, Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
-from bot.handlers import common, confirm
+from bot.handlers import common, confirm, positions_ui
 from polymarket.credentials import NoAccountConnected, TradingUnavailable
 
 logger = logging.getLogger(__name__)
@@ -28,6 +28,12 @@ logger = logging.getLogger(__name__)
 
 def _short(token: str) -> str:  # thin alias — single implementation lives in common.short
     return common.short(token)
+
+
+def _browse_kb(context: ContextTypes.DEFAULT_TYPE):
+    """[🔥 Browse markets][🏠 Dashboard] — point raw-command errors at the funnel."""
+    return common.with_nav(context, [[InlineKeyboardButton(
+        common.tr(context, "bot.tile.trending"), callback_data="menu:trending")]])
 
 
 def _floats(args: list[str], n: int) -> list[float] | None:
@@ -50,14 +56,20 @@ async def sell(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def _limit(update: Update, context: ContextTypes.DEFAULT_TYPE, side: str) -> None:
     args = context.args or []
     if len(args) < 3:
-        await common.reply(update, context, f"bot.trade.{side}_usage")
+        await common.reply(update, context, f"bot.trade.{side}_usage", reply_markup=_browse_kb(context))
         return
     token = args[0]
     nums = _floats(args, 2)
     if nums is None:
-        await common.reply(update, context, "bot.trade.bad_number")
+        await common.reply(update, context, "bot.trade.bad_number", reply_markup=_browse_kb(context))
         return
     price, size = nums
+    if not (0 < price < 1):  # Polymarket prices are probabilities in (0,1)
+        await common.reply(update, context, "bot.trade.bad_price")
+        return
+    if size <= 0:
+        await common.reply(update, context, "bot.trade.bad_size")
+        return
     intent = confirm.make_intent("limit", side=side, token_id=token, price=price, size=size)
     await confirm.request(update, context, intent, f"bot.confirm.{side}",
                           size=size, price=price, token=_short(token))
@@ -68,20 +80,28 @@ async def marketbuy(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def marketsell(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    # No args → show the /manage list so the user can sell with one tap instead of
+    # being told to paste a token id.
+    if not (context.args or []):
+        await positions_ui.manage(update, context)
+        return
     await _market(update, context, "sell", "marketsell")
 
 
 async def _market(update: Update, context: ContextTypes.DEFAULT_TYPE, side: str, usage: str) -> None:
     args = context.args or []
     if len(args) < 2:
-        await common.reply(update, context, f"bot.trade.{usage}_usage")
+        await common.reply(update, context, f"bot.trade.{usage}_usage", reply_markup=_browse_kb(context))
         return
     token = args[0]
     nums = _floats(args, 1)
     if nums is None:
-        await common.reply(update, context, "bot.trade.bad_number")
+        await common.reply(update, context, "bot.trade.bad_number", reply_markup=_browse_kb(context))
         return
     amount = nums[0]
+    if amount <= 0:
+        await common.reply(update, context, "bot.trade.bad_amount")
+        return
     intent = confirm.make_intent("market", side=side, token_id=token, amount=amount)
     key = "bot.confirm.marketbuy" if side == "buy" else "bot.confirm.marketsell"
     await confirm.request(update, context, intent, key, amount=amount, token=_short(token))
@@ -89,8 +109,8 @@ async def _market(update: Update, context: ContextTypes.DEFAULT_TYPE, side: str,
 
 async def close(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     args = context.args or []
-    if not args:
-        await common.reply(update, context, "bot.trade.close_usage")
+    if not args:  # no token → the /manage list (one-tap close)
+        await positions_ui.manage(update, context)
         return
     token = args[0]
     user_id = common.db_user_id(context)

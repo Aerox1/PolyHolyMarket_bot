@@ -184,7 +184,12 @@ async def _execute(update: Update, context: ContextTypes.DEFAULT_TYPE, intent: d
         await _audit(AuditEvent.ORDER_ERROR, user_id, account_id, {"kind": kind, "error": type(exc).__name__})
         if kind in ("limit", "market", "close") and account_id is not None:
             await _log_order(account_id, intent, status="rejected", error=type(exc).__name__)
-        await respond("bot.order.failed", markup=common.with_nav(context))
+        # Surface a clearer cause when the CLOB error looks like a funding problem.
+        _m = str(exc).lower()
+        fail_key = ("bot.order.insufficient"
+                    if any(s in _m for s in ("insufficient", "not enough", "allowance", "balance"))
+                    else "bot.order.failed")
+        await respond(fail_key, markup=common.with_nav(context))
         return
 
     # ── interpret result ──

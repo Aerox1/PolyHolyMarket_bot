@@ -48,7 +48,9 @@
       "done": "✅ 已断开连接。您存储的凭据已被删除。",
       "none": "您没有可断开连接的已连接账户。",
       "button": "{label} — {wallet}",
-      "choose": "您想断开哪个钱包的连接？"
+      "choose": "您想断开哪个钱包的连接？",
+      "yes": "🗑 是的，断开",
+      "cancelled": "已取消——未删除任何内容。"
     },
     "account": {
       "none": "您尚未连接账户。请点击 *连接账户* 或使用 /connect。",
@@ -100,7 +102,10 @@
       "sell_pct": "卖出 {pct}%",
       "close_full": "平仓",
       "cancel_one": "✖ #{n}",
-      "cancel_all_btn": "🗑 全部取消"
+      "cancel_all_btn": "🗑 全部取消",
+      "bad_price": "⚠️ 价格必须在 0 到 1 之间（例如 0.62）。",
+      "bad_size": "⚠️ 数量必须是正的份额数。",
+      "bad_amount": "⚠️ 金额必须是正数。"
     },
     "confirm": {
       "buy": "确认 *买入* {size} 份 `{token}`，价格 ${price}？",
@@ -122,7 +127,8 @@
       "failed": "❌ 订单失败。请重试或调整您的参数。",
       "cancelled": "✅ 订单 `{order_id}` 已取消。",
       "cancelled_all": "✅ 已取消 {count} 笔未成交订单。",
-      "closed": "✅ `{token}` 的持仓已平仓。"
+      "closed": "✅ `{token}` 的持仓已平仓。",
+      "insufficient": "❌ 下单失败——余额不足以完成此订单。"
     },
     "settings": {
       "header": "⚙️ *设置*",
@@ -144,7 +150,7 @@
       "balance_hint": "点击 ↻ Refresh 刷新",
       "coming_soon": "⭐ 自选列表即将上线。",
       "connected": "💼 *你的账户*\n`{wallet}`  _(点击复制)_\n余额：{balance}\n\n🔗 *邀请赚奖励*\n`{link}`\n好友通过你的链接加入并开始下注后，即可解锁奖励。\n\n你想做什么？",
-      "play_hint": "🎲 滑动小游戏会作为小程序从机器人的菜单按钮打开。（部署时设置 WEBAPP_BASE_URL，即可直接从此卡片打开。）",
+      "play_hint": "🎲 滑动游戏将作为 Mini App 打开。即将在此推出！",
       "trade_hint": "如何交易：打开 🔥 Trending 或 🎲 Play 选择市场，或使用 `/buy <token> <price> <size>` 或 `/marketbuy <token> <usd>`。",
       "welcome": "👋 *欢迎你，{name}！*\n\n连接你的 Polymarket 钱包，即可开始交易并赚取积分。\n\n🔗 *你的邀请链接*（分享可赚奖励）\n`{link}`\n\n点击下方卡片 👇"
     },
@@ -159,7 +165,8 @@
       "outdated": "此列表已过期——请重新打开 🔥 热门。"
     },
     "rewards": {
-      "screen": "💰 *奖励*\n\n⭐ *你的积分：* {balance}\n\n*邀请*\n• 直接：{direct} · 间接：{indirect} · 活跃：{unlocked}\n• 邀请获得的积分：{referral_points}\n\n*玩法说明*\n逐层递减的多层级邀请：{layers}。好友需下满 {unlock_bets} 注才能解锁——解锁后你们双方各得 {signup} 积分，且你可从其各层级的活动中赚取分成。\n\n🔗 *你的邀请链接*\n`{link}`\n分享出去——你的好友也能获得新人奖励。"
+      "screen": "💰 *奖励*\n\n⭐ *你的积分：* {balance}\n\n*邀请*\n• 直接：{direct} · 间接：{indirect} · 活跃：{unlocked}\n• 邀请获得的积分：{referral_points}\n\n*玩法说明*\n逐层递减的多层级邀请：{layers}。好友需下满 {unlock_bets} 注才能解锁——解锁后你们双方各得 {signup} 积分，且你可从其各层级的活动中赚取分成。\n\n🔗 *你的邀请链接*\n`{link}`\n分享出去——你的好友也能获得新人奖励。",
+      "share": "📤 分享"
     },
     "settle": {
       "lost": "❌ *下注已结算*\n“{q}” 的 {outcome} —— 亏损 ${amount}。",

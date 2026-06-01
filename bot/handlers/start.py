@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from urllib.parse import quote
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Message, Update, WebAppInfo
 from telegram.error import BadRequest
@@ -55,7 +56,7 @@ def dashboard_keyboard(context: ContextTypes.DEFAULT_TYPE, *, connected: bool) -
         [b("buy", "buy"), b("sell", "sell")],
         [b("positions", "positions"), b("orders", "orders")],
         [b("trending", "trending"), _play_button(context)],
-        [b("rewards", "rewards"), b("watchlist", "watchlist")],
+        [b("rewards", "rewards")],
     ]
     if connected:
         rows.append([b("accounts", "accounts"), b("settings", "settings")])
@@ -66,6 +67,23 @@ def dashboard_keyboard(context: ContextTypes.DEFAULT_TYPE, *, connected: bool) -
         ])
     rows.append([b("help", "help"), b("refresh", "refresh")])
     return InlineKeyboardMarkup(rows)
+
+
+def _help_keyboard(context: ContextTypes.DEFAULT_TYPE) -> InlineKeyboardMarkup:
+    """Turn /help into a launchpad rather than a dead-end wall of text."""
+    def b(key, data):
+        return InlineKeyboardButton(t(f"bot.tile.{key}", common.lang_of(context)), callback_data=f"menu:{data}")
+    return common.with_nav(context, [
+        [b("trending", "trending"), b("positions", "positions")],
+        [b("rewards", "rewards")],
+    ])
+
+
+def _create_keyboard(context: ContextTypes.DEFAULT_TYPE) -> InlineKeyboardMarkup:
+    return common.with_nav(context, [
+        [InlineKeyboardButton(t("bot.menu.connect", common.lang_of(context)), callback_data="menu:connect")],
+        [InlineKeyboardButton("🌐 Polymarket", url=settings.polymarket_signup_url)],
+    ])
 
 
 def _play_button(context: ContextTypes.DEFAULT_TYPE) -> InlineKeyboardButton:
@@ -179,10 +197,11 @@ async def on_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         elif action == "create":
             await query.message.reply_text(
                 common.tr(context, "bot.create.instructions", url=settings.polymarket_signup_url),
-                parse_mode="Markdown", reply_markup=common.with_nav(context))
+                parse_mode="Markdown", reply_markup=_create_keyboard(context), disable_web_page_preview=True)
         elif action == "help":
             await query.message.reply_text(common.tr(context, "bot.start.help_text"),
-                                           parse_mode="Markdown", reply_markup=common.with_nav(context))
+                                           parse_mode="Markdown", reply_markup=_help_keyboard(context),
+                                           disable_web_page_preview=True)
         elif action == "positions":
             await inquiry.positions(update, context)
         elif action == "orders":
@@ -242,9 +261,10 @@ async def rewards_screen(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         link=referral_link(context, code), signup=rewards_repo.SIGNUP_BONUS,
         unlock_bets=rewards_repo.REFERRAL_UNLOCK_BETS,
     )
+    share_url = "https://t.me/share/url?url=" + quote(referral_link(context, code), safe="")
+    kb = common.with_nav(context, [[InlineKeyboardButton(common.tr(context, "bot.rewards.share"), url=share_url)]])
     target = update.callback_query.message if update.callback_query else update.effective_message
-    await target.reply_text(text, parse_mode="Markdown", disable_web_page_preview=True,
-                            reply_markup=common.with_nav(context))
+    await target.reply_text(text, parse_mode="Markdown", disable_web_page_preview=True, reply_markup=kb)
 
 
 async def _accounts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -271,7 +291,8 @@ async def _settings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await common.reply(update, context, "bot.start.help_text", reply_markup=common.with_nav(context))
+    await common.reply(update, context, "bot.start.help_text",
+                       reply_markup=_help_keyboard(context), disable_preview=True)
 
 
 async def language_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

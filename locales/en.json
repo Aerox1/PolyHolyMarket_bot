@@ -48,7 +48,9 @@
       "done": "✅ Disconnected. Your stored credentials were deleted.",
       "none": "You have no connected account to disconnect.",
       "button": "{label} — {wallet}",
-      "choose": "Which wallet do you want to disconnect?"
+      "choose": "Which wallet do you want to disconnect?",
+      "yes": "🗑 Yes, disconnect",
+      "cancelled": "Cancelled — nothing was deleted."
     },
     "account": {
       "none": "You haven't connected an account yet. Tap *Connect Account* or use /connect.",
@@ -100,7 +102,10 @@
       "sell_pct": "Sell {pct}%",
       "close_full": "Close position",
       "cancel_one": "✖ #{n}",
-      "cancel_all_btn": "🗑 Cancel all"
+      "cancel_all_btn": "🗑 Cancel all",
+      "bad_price": "⚠️ Price must be between 0 and 1 (e.g. 0.62).",
+      "bad_size": "⚠️ Size must be a positive number of shares.",
+      "bad_amount": "⚠️ Amount must be a positive number."
     },
     "confirm": {
       "buy": "Confirm *BUY* {size} of `{token}` @ ${price}?",
@@ -122,7 +127,8 @@
       "failed": "❌ Order failed. Please try again or adjust your parameters.",
       "cancelled": "✅ Order `{order_id}` cancelled.",
       "cancelled_all": "✅ Cancelled {count} open order(s).",
-      "closed": "✅ Position in `{token}` closed."
+      "closed": "✅ Position in `{token}` closed.",
+      "insufficient": "❌ Order failed — not enough balance for this order."
     },
     "settings": {
       "header": "⚙️ *Settings*",
@@ -175,10 +181,11 @@
       "balance_hint": "tap ↻ Refresh",
       "trade_hint": "To trade: open 🔥 Trending or 🎲 Play to pick a market, or use `/buy <token> <price> <size>` or `/marketbuy <token> <usd>`.",
       "coming_soon": "⭐ Watchlist is coming soon.",
-      "play_hint": "🎲 The swipe game opens as a Mini App from the bot's menu button. (Set WEBAPP_BASE_URL on deploy and it opens right from this tile.)"
+      "play_hint": "🎲 The swipe game opens as a Mini App. It'll be available here soon!"
     },
     "rewards": {
-      "screen": "💰 *Rewards*\n\n⭐ *Your points:* {balance}\n\n*Referrals*\n• Direct: {direct} · Indirect: {indirect} · Active: {unlocked}\n• Points from referrals: {referral_points}\n\n*How it works*\nDescending multi-layer referral: {layers}. A friend must place {unlock_bets} bets to unlock — then you BOTH get {signup} points and you earn a share of their activity across layers.\n\n🔗 *Your referral link*\n`{link}`\nShare it — your friends get a welcome bonus too."
+      "screen": "💰 *Rewards*\n\n⭐ *Your points:* {balance}\n\n*Referrals*\n• Direct: {direct} · Indirect: {indirect} · Active: {unlocked}\n• Points from referrals: {referral_points}\n\n*How it works*\nDescending multi-layer referral: {layers}. A friend must place {unlock_bets} bets to unlock — then you BOTH get {signup} points and you earn a share of their activity across layers.\n\n🔗 *Your referral link*\n`{link}`\nShare it — your friends get a welcome bonus too.",
+      "share": "📤 Share"
     },
     "nav": {
       "home": "🏠 Dashboard",
