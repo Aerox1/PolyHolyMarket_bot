@@ -9,18 +9,24 @@ failures per source / per item with savepoints, mirroring ``settlement_job``.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 from sqlalchemy.exc import IntegrityError
+from telegram.error import Forbidden, TelegramError
 from telegram.ext import Application, ContextTypes
 
 from bot.news import crawler, publisher, render as render_mod
 from core.config import settings
+from core.i18n import t
 from db.engine import async_session_scope
-from db.models import NewsItem
+from db.models import NewsItem, UserSettings
 from db.repositories import appconfig
+from db.repositories import news_delivery
 from db.repositories import news_items as items_repo
+from db.repositories import news_prefs
 from db.repositories import news_sources as sources_repo
 
 logger = logging.getLogger(__name__)
@@ -160,6 +166,98 @@ async def publish_job(context: ContextTypes.DEFAULT_TYPE) -> None:
             logger.exception("news publish failed for item %s; left for retry", item_id)
 
 
+# ── per-user delivery (Phase 5) ──────────────────────────────────────────────
+
+def _user_tz(tz_str: str | None) -> ZoneInfo:
+    try:
+        return ZoneInfo(tz_str or "UTC")
+    except Exception:  # noqa: BLE001 — bad/unknown tz string → UTC
+        return ZoneInfo("UTC")
+
+
+def _in_quiet_hours(hour: int, quiet_start: int | None, quiet_end: int | None) -> bool:
+    if quiet_start is None or quiet_end is None or quiet_start == quiet_end:
+        return False
+    if quiet_start < quiet_end:
+        return quiet_start <= hour < quiet_end
+    return hour >= quiet_start or hour < quiet_end  # wrap-around (e.g. 22→07)
+
+
+async def _deliver(context, *, mode: str, channel: str, header_key: str) -> None:
+    """Shared per-user delivery loop for realtime + digest. ``mode`` selects the
+    opted-in users; ``channel`` tags the dedup ledger; digest adds an hour/once-
+    a-day gate via the digest_only flag below."""
+    bot = context.bot
+    digest = channel == "digest"
+    async with async_session_scope() as session:
+        targets = await news_delivery.users_for(session, mode)
+    if not targets:
+        return
+    now = datetime.now(timezone.utc)
+    sent = 0
+    for user_id, telegram_id, lang in targets:
+        if sent >= settings.news_per_tick_cap:
+            break
+        # gather candidates in a short read scope (snapshot so we don't hold the
+        # connection across the send)
+        async with async_session_scope() as session:
+            prefs = await news_prefs.get_or_create(session, user_id)
+            us = await session.get(UserSettings, user_id)
+            local = now.astimezone(_user_tz(us.timezone if us else "UTC"))
+            # quiet hours suppress REALTIME pings only — a scheduled daily digest
+            # fires at the user's chosen hour regardless.
+            if not digest and _in_quiet_hours(local.hour, prefs.quiet_start, prefs.quiet_end):
+                continue
+            if digest:
+                if local.hour != prefs.digest_hour:
+                    continue
+                last = prefs.last_digest_at
+                if last is not None:
+                    if last.tzinfo is None:  # SQLite returns naive — it's stored UTC
+                        last = last.replace(tzinfo=timezone.utc)
+                    if last.astimezone(local.tzinfo).date() == local.date():
+                        continue  # already sent a digest today
+            followed = await news_prefs.followed_ids(session, user_id)
+            mkts = await news_delivery.user_market_ids(session, user_id)
+            limit = prefs.max_per_digest if digest else settings.news_realtime_max
+            only_relevant = prefs.only_relevant if digest else True  # realtime is high-signal only
+            items = await news_delivery.candidates_for(
+                session, user_id, followed_ids=followed, market_ids=mkts,
+                only_relevant=only_relevant, limit=limit)
+            if not items:
+                continue
+            snaps = [publisher.snapshot(it) for it in items]
+            item_ids = [it.id for it in items]
+
+        text = publisher.build_digest(snaps, lang=lang, header=t(header_key, lang))
+        try:
+            await bot.send_message(chat_id=telegram_id, text=text, parse_mode="HTML",
+                                   disable_web_page_preview=True)
+        except Forbidden:  # user blocked the bot — stop delivering to them
+            async with async_session_scope() as session:
+                await news_prefs.set_delivery(session, user_id, "off")
+            continue
+        except TelegramError as exc:
+            logger.info("news %s send failed for %s: %s", channel, telegram_id, type(exc).__name__)
+            continue
+
+        async with async_session_scope() as session:  # record delivery (dedup) post-send
+            for iid in item_ids:
+                news_delivery.mark_delivered(session, user_id, iid, channel)
+            if digest:
+                await news_prefs.mark_digest_sent(session, user_id, now)
+        sent += 1
+        await asyncio.sleep(0.05)  # gentle per-chat pacing
+
+
+async def news_realtime_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    await _deliver(context, mode="realtime", channel="realtime", header_key="bot.news.realtime_header")
+
+
+async def news_digest_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    await _deliver(context, mode="daily", channel="digest", header_key="bot.news.digest_header")
+
+
 def register_news_jobs(application: Application) -> None:
     if not settings.news_pipeline_enabled:
         logger.info("News pipeline disabled (NEWS_PIPELINE_ENABLED=0) — jobs not registered.")
@@ -177,6 +275,9 @@ def register_news_jobs(application: Application) -> None:
                      name="news_render", job_kwargs=serial)
     jq.run_repeating(publish_job, interval=settings.news_publish_interval_seconds, first=120,
                      name="news_publish", job_kwargs=serial)
-    logger.info("News pipeline jobs registered (crawl=%ss, render=%ss, publish=%ss).",
+    # per-user delivery
+    jq.run_repeating(news_realtime_job, interval=120, first=150, name="news_realtime", job_kwargs=serial)
+    jq.run_repeating(news_digest_job, interval=600, first=180, name="news_digest", job_kwargs=serial)
+    logger.info("News pipeline jobs registered (crawl=%ss, render=%ss, publish=%ss, +realtime/digest).",
                 settings.news_crawl_interval_seconds, settings.news_render_interval_seconds,
                 settings.news_publish_interval_seconds)

@@ -191,4 +191,4 @@ def test_register_news_jobs_enabled(monkeypatch):
     monkeypatch.setattr(news_jobs.settings, "news_pipeline_enabled", True)
     calls: list = []
     news_jobs.register_news_jobs(_recording_app(calls))
-    assert set(calls) == {"news_crawl", "news_render", "news_publish"}
+    assert set(calls) == {"news_crawl", "news_render", "news_publish", "news_realtime", "news_digest"}

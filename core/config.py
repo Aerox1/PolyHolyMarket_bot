@@ -108,6 +108,8 @@ class Settings(BaseSettings):
     news_channel_lang: str = Field("en", alias="NEWS_CHANNEL_LANG")
     # Max per-user sends per delivery tick (Telegram rate-limit discipline).
     news_per_tick_cap: int = Field(25, alias="NEWS_PER_TICK_CAP")
+    # Max items bundled into a single real-time push.
+    news_realtime_max: int = Field(3, alias="NEWS_REALTIME_MAX")
     # Optional logo composited onto rendered news cards (relative to repo root).
     news_logo_path: str = Field("", alias="NEWS_LOGO_PATH")
 

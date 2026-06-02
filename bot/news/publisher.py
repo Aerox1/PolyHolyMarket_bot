@@ -97,6 +97,26 @@ def build_caption(item, *, lang: str, cap: int) -> str:
     return out
 
 
+def build_digest(items, *, lang: str, header: str) -> str:
+    """A per-user DM bundling several items (used by realtime + daily digest).
+    Each item is short (title + clipped summary + a CTA link), so the total stays
+    well under the 4096 message cap; items are pre-limited by the caller."""
+    blocks = [f"<b>{_esc(header)}</b>"] if header else []
+    for it in items:
+        tr = _best_translation(it, lang)
+        line = f"<b>{_esc((tr.get('title') or it.title_orig or '')[:_TITLE_MAX])}</b>"
+        summary = (tr.get("summary") or "").strip()[:240]
+        if summary:
+            line += f"\n{_esc(summary)}"
+        link = it.cta_url or it.url
+        if link:
+            label = t("bot.news.cta_trade", lang) if it.cta_market_id else t("bot.news.cta_open", lang)
+            line += f'\n🔗 <a href="{_esc(link)}">{_esc(label)}</a>'
+        blocks.append(line)
+    blocks.append(_esc(t("bot.news.nfa_footer", lang)))
+    return "\n\n".join(blocks)
+
+
 def build_keyboard(item, *, bot_username: str | None, lang: str) -> InlineKeyboardMarkup | None:
     url = item.cta_url or (cta_mod.news_deeplink(bot_username, item_id=item.id) if bot_username else None)
     if not url:

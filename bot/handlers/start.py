@@ -15,7 +15,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Message, Update
 from telegram.error import BadRequest
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes
 
-from bot.handlers import common, discover, inquiry
+from bot.handlers import common, discover, inquiry, news
 from core import gemini
 from core.config import settings
 from core.i18n import LANG_FLAGS, LANG_NAMES, SUPPORTED, t
@@ -56,7 +56,7 @@ def dashboard_keyboard(context: ContextTypes.DEFAULT_TYPE, *, connected: bool) -
         [b("buy", "buy"), b("sell", "sell")],
         [b("positions", "positions"), b("orders", "orders")],
         [b("trending", "trending"), _play_button(context)],
-        [b("rewards", "rewards")],
+        [b("rewards", "rewards"), b("news", "news")],
     ]
     if connected:
         rows.append([b("accounts", "accounts"), b("settings", "settings")])
@@ -233,6 +233,8 @@ async def on_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             await discover.trending(update, context)
         elif action == "rewards":
             await rewards_screen(update, context)
+        elif action == "news":
+            await news.show_settings_screen(update, context)
         elif action == "accounts":
             await _accounts(update, context)
         elif action == "settings":
@@ -330,4 +332,4 @@ def register(application: Application) -> None:
     application.add_handler(CallbackQueryHandler(on_language_choice, pattern="^lang:"))
     application.add_handler(CallbackQueryHandler(
         on_menu,
-        pattern="^menu:(home|create|help|positions|orders|trending|rewards|watchlist|play|settings|accounts|refresh|buy|sell)$"))
+        pattern="^menu:(home|create|help|positions|orders|trending|rewards|news|watchlist|play|settings|accounts|refresh|buy|sell)$"))

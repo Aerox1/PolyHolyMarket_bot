@@ -174,7 +174,8 @@
       "accounts": "🔗 Wallet",
       "settings": "⚙️ Settings",
       "help": "ℹ️ Help",
-      "refresh": "↻ Refresh"
+      "refresh": "↻ Refresh",
+      "news": "📰 News"
     },
     "dash": {
       "connected": "💼 *Your account*\n`{wallet}`  _(tap to copy)_\nBalance: {balance}\n\n🔗 *Refer & earn*\n`{link}`\nFriends who join with your link unlock a bonus once they start betting.\n\nWhat would you like to do?",
@@ -196,7 +197,25 @@
       "nfa_footer": "📰 Informational only — not financial advice.",
       "cta_trade": "📈 Trade this market",
       "cta_open": "📰 Open in bot",
-      "source": "Source"
+      "source": "Source",
+      "settings_title": "News preferences",
+      "mode": "Mode",
+      "mode_off": "Off",
+      "mode_daily": "Daily",
+      "mode_realtime": "Real-time",
+      "digest_hour": "Digest hour",
+      "only_topics": "Only my topics",
+      "only_topics_btn": "🎯 Toggle: only my topics",
+      "on": "On",
+      "off": "Off",
+      "following": "Following",
+      "topics": "📌 Topics",
+      "topics_title": "Pick news topics to follow",
+      "pick_hour": "Pick your daily digest hour (your timezone)",
+      "no_topics": "No news topics available yet.",
+      "realtime_header": "📰 Fresh news for you",
+      "digest_header": "📰 Your daily news digest",
+      "quiet": "Quiet hours"
     }
   },
   "dash": {
