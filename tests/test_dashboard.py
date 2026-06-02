@@ -106,6 +106,14 @@ def test_referrals_page_renders(client, seeded):
     assert "referr" in r.text.lower()  # leaderboard / overview rendered
 
 
+def test_referrals_csv_export(client, seeded):
+    _login(client, "s3cret!")
+    r = client.get("/referrals/export.csv")
+    assert r.status_code == 200
+    assert "text/csv" in r.headers.get("content-type", "")
+    assert "inviter_id,inviter_username" in r.text  # header row present
+
+
 def test_user_detail_lists_referees(client, seeded):
     from sqlalchemy import select
 

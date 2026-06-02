@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from starlette.status import HTTP_303_SEE_OTHER
@@ -176,8 +176,28 @@ def user_detail(
 
 @router.get("/referrals")
 def referrals_page(request: Request, admin: Admin = Depends(require_admin), db: Session = Depends(get_db)):
+    leaders = repo.top_referrers(db, 25)
+    for ldr in leaders:  # attach each referrer's referees so rows can expand
+        ldr["referees"] = repo.user_referees(db, ldr["user_id"], limit=10)
     return deps.render(request, "referrals.html", admin=admin,
-                       overview=repo.referral_overview(db), leaders=repo.top_referrers(db, 25))
+                       overview=repo.referral_overview(db), leaders=leaders)
+
+
+@router.get("/referrals/export.csv")
+def referrals_export(admin: Admin = Depends(require_admin), db: Session = Depends(get_db)):
+    import csv
+    import io
+
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["inviter_id", "inviter_username", "invitee_id", "invitee_username",
+                "status", "created_at", "unlocked_at", "invitee_bets"])
+    for e in repo.referral_edges(db):
+        w.writerow([e["inviter_id"], e["inviter_username"] or "", e["invitee_id"],
+                    e["invitee_username"] or "", e["status"], e["created_at"] or "",
+                    e["unlocked_at"] or "", e["bets"]])
+    return Response(content=buf.getvalue(), media_type="text/csv",
+                    headers={"Content-Disposition": "attachment; filename=referrals.csv"})
 
 
 @router.post("/users/{user_id}/status")

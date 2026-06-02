@@ -31,7 +31,10 @@
   </div>
 
   <div class="card">
-    <div class="card-header"><h2>{{ t('dash.referrals.leaderboard') }}</h2></div>
+    <div class="card-header">
+      <h2>{{ t('dash.referrals.leaderboard') }}</h2>
+      <a class="btn sm" href="/referrals/export.csv">{{ t('dash.referrals.export') }}</a>
+    </div>
     <div class="table-wrap">
       <table>
         <thead>
@@ -45,8 +48,25 @@
         <tbody>
           {% for r in leaders %}
           <tr>
-            <td><a href="/users/{{ r.user_id }}">{{ r.username or ('#' ~ r.user_id) }}</a>
-                <bdi class="mono ltr muted">{{ r.telegram_id or '' }}</bdi></td>
+            <td>
+              <details>
+                <summary>{{ r.username or ('#' ~ r.user_id) }}
+                  <bdi class="mono ltr muted">{{ r.telegram_id or '' }}</bdi></summary>
+                <div style="margin:6px 0 2px 14px;">
+                  <a href="/users/{{ r.user_id }}">{{ t('dash.users.profile') }} →</a>
+                  {% if r.referees %}
+                  <ul style="margin:6px 0; padding-inline-start:18px;">
+                    {% for x in r.referees %}
+                    <li><a href="/users/{{ x.user_id }}">{{ x.username or ('#' ~ x.user_id) }}</a>
+                      — {% if x.status == 'unlocked' %}<span class="status-pill active">{{ t('dash.referrals.unlocked') }}</span>
+                        {% else %}<span class="status-pill muted">{{ t('dash.referrals.pending') }}</span>{% endif %}
+                      <bdi class="ltr muted">({{ x.bets }}/{{ overview.unlock_bets }})</bdi></li>
+                    {% endfor %}
+                  </ul>
+                  {% else %}<div class="muted" style="margin-top:4px;">{{ t('dash.referrals.none') }}</div>{% endif %}
+                </div>
+              </details>
+            </td>
             <td class="right"><bdi class="ltr">{{ r.direct }}</bdi></td>
             <td class="right"><bdi class="ltr green">{{ r.unlocked }}</bdi></td>
             <td class="right"><bdi class="ltr">{{ '{:,}'.format(r.points) }}</bdi></td>

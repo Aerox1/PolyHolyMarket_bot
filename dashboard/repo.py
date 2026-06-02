@@ -11,7 +11,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from sqlalchemy import case, func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from core.config import settings
 from db.models import Account, AuditLog, Category, Order, PointsLedger, Referral, Trade, User, UserStats, UserStatus
@@ -408,7 +408,30 @@ def referral_overview(db: Session) -> dict:
         "unlocked": unlocked,
         "pending": edges - unlocked,
         "with_code": int(db.scalar(select(func.count()).select_from(User).where(User.referral_code.isnot(None))) or 0),
+        "unlock_bets": REFERRAL_UNLOCK_BETS,
     }
+
+
+def referral_edges(db: Session) -> list[dict]:
+    """Every referral edge (inviter → invitee), newest first — for CSV export.
+    Public columns only (no key material)."""
+    Inv, Ree = aliased(User), aliased(User)
+    rows = db.execute(
+        select(
+            Referral.inviter_id, Inv.username, Referral.invitee_id, Ree.username,
+            Referral.status, Referral.created_at, Referral.unlocked_at,
+            func.coalesce(UserStats.total_bets, 0),
+        )
+        .join(Inv, Inv.id == Referral.inviter_id)
+        .join(Ree, Ree.id == Referral.invitee_id)
+        .outerjoin(UserStats, UserStats.user_id == Referral.invitee_id)
+        .order_by(Referral.created_at.desc())
+    ).all()
+    return [
+        {"inviter_id": iid, "inviter_username": iu, "invitee_id": eid, "invitee_username": eu,
+         "status": st, "created_at": cr, "unlocked_at": ul, "bets": int(bets or 0)}
+        for iid, iu, eid, eu, st, cr, ul, bets in rows
+    ]
 
 
 def top_referrers(db: Session, limit: int = 20) -> list[dict]:

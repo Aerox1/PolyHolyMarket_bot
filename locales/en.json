@@ -372,7 +372,8 @@
       "referrer": "Referrer",
       "direct": "Direct",
       "points": "Points",
-      "none": "No referrals yet."
+      "none": "No referrals yet.",
+      "export": "⬇ Export CSV"
     }
   }
 }

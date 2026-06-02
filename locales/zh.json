@@ -372,7 +372,8 @@
       "referrer": "推荐人",
       "direct": "直接",
       "points": "积分",
-      "none": "暂无推荐。"
+      "none": "暂无推荐。",
+      "export": "⬇ 导出 CSV"
     }
   }
 }
