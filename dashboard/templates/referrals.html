@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% set active_nav = 'referrals' %}
+{% block title %}{{ t('dash.referrals.title') }}{% endblock %}
+
+{% block content %}
+  <div class="page-head">
+    <h1 class="page-title">{{ t('dash.referrals.title') }}</h1>
+  </div>
+
+  <div class="metrics">
+    <div class="metric">
+      <div class="metric-label">{{ t('dash.referrals.total_points') }}</div>
+      <div class="metric-value"><bdi class="ltr">{{ '{:,}'.format(overview.total_points) }}</bdi></div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">{{ t('dash.referrals.edges') }}</div>
+      <div class="metric-value blue"><bdi class="ltr">{{ overview.edges }}</bdi></div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">{{ t('dash.referrals.unlocked') }}</div>
+      <div class="metric-value green"><bdi class="ltr">{{ overview.unlocked }}</bdi></div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">{{ t('dash.referrals.pending') }}</div>
+      <div class="metric-value yellow"><bdi class="ltr">{{ overview.pending }}</bdi></div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">{{ t('dash.referrals.with_code') }}</div>
+      <div class="metric-value"><bdi class="ltr">{{ overview.with_code }}</bdi></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h2>{{ t('dash.referrals.leaderboard') }}</h2></div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>{{ t('dash.referrals.referrer') }}</th>
+            <th class="right">{{ t('dash.referrals.direct') }}</th>
+            <th class="right">{{ t('dash.referrals.unlocked') }}</th>
+            <th class="right">{{ t('dash.referrals.points') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in leaders %}
+          <tr>
+            <td><a href="/users/{{ r.user_id }}">{{ r.username or ('#' ~ r.user_id) }}</a>
+                <bdi class="mono ltr muted">{{ r.telegram_id or '' }}</bdi></td>
+            <td class="right"><bdi class="ltr">{{ r.direct }}</bdi></td>
+            <td class="right"><bdi class="ltr green">{{ r.unlocked }}</bdi></td>
+            <td class="right"><bdi class="ltr">{{ '{:,}'.format(r.points) }}</bdi></td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4"><div class="empty">{{ t('dash.referrals.none') }}</div></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}

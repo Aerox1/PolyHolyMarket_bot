@@ -222,7 +222,8 @@
       "audit": "审计日志",
       "settings": "设置",
       "logout": "退出登录",
-      "miniapp": "小程序"
+      "miniapp": "小程序",
+      "referrals": "推荐"
     },
     "users": {
       "title": "用户",
@@ -270,7 +271,15 @@
       "size": "数量",
       "status_": "状态 ",
       "token": "代币",
-      "value": "价值"
+      "value": "价值",
+      "rewards": "奖励与推荐",
+      "points": "积分",
+      "referral_code": "推荐码",
+      "invited_by": "邀请人",
+      "direct_refs": "直接推荐",
+      "indirect_refs": "间接",
+      "unlocked_refs": "已解锁",
+      "referral_points": "推荐积分"
     },
     "metrics": {
       "title": "概览",
@@ -347,6 +356,19 @@
       "welcome_none": "尚无欢迎横幅——它会自动生成，或在下方上传一张。",
       "welcome_note": "此图像显示在机器人 /start 界面的顶部。“Regenerate” 会将其清除，让小程序服务在下次启动时重新生成（在预算范围内）；上传则会立即替换。",
       "welcome_title": "欢迎横幅（显示于 /start）"
+    },
+    "referrals": {
+      "title": "推荐与积分",
+      "total_points": "已发放积分总数",
+      "edges": "推荐关系",
+      "unlocked": "已解锁",
+      "pending": "待解锁",
+      "with_code": "拥有推荐码的用户",
+      "leaderboard": "推荐排行榜",
+      "referrer": "推荐人",
+      "direct": "直接",
+      "points": "积分",
+      "none": "暂无推荐。"
     }
   }
 }

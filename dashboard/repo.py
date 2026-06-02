@@ -10,11 +10,11 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from core.config import settings
-from db.models import Account, AuditLog, Category, Order, Trade, User, UserStatus
+from db.models import Account, AuditLog, Category, Order, PointsLedger, Referral, Trade, User, UserStatus
 from db.repositories import appconfig, gemini_usage
 
 
@@ -339,3 +339,76 @@ def gemini_stats(db: Session) -> dict:
         "images_this_week": gemini_usage.image_count_window_sync(db),
         "configured": bool(settings.gemini_api_key),
     }
+
+
+# ── Rewards & referrals ─────────────────────────────────────────────────────────
+
+def _points(db: Session, user_id: int, reasons: tuple[str, ...] | None = None) -> int:
+    stmt = select(func.coalesce(func.sum(PointsLedger.delta), 0)).where(PointsLedger.user_id == user_id)
+    if reasons:
+        stmt = stmt.where(PointsLedger.reason.in_(reasons))
+    return int(db.scalar(stmt) or 0)
+
+
+def user_rewards(db: Session, user_id: int) -> dict:
+    """Per-user rewards/referral summary (mirrors rewards.referral_stats, sync)."""
+    user = db.get(User, user_id)
+    inviter = None
+    if user and user.referred_by:
+        inv = db.get(User, user.referred_by)
+        if inv:
+            inviter = {"id": inv.id, "username": inv.username, "telegram_id": inv.telegram_id}
+    direct = int(db.scalar(select(func.count()).select_from(Referral).where(Referral.inviter_id == user_id)) or 0)
+    unlocked = int(db.scalar(select(func.count()).select_from(Referral).where(
+        Referral.inviter_id == user_id, Referral.status == "unlocked")) or 0)
+    direct_ids = list(db.scalars(select(Referral.invitee_id).where(Referral.inviter_id == user_id)))
+    indirect = 0
+    if direct_ids:
+        indirect = int(db.scalar(select(func.count()).select_from(Referral).where(
+            Referral.inviter_id.in_(direct_ids))) or 0)
+    return {
+        "points": _points(db, user_id),
+        "referral_code": (user.referral_code if user else None),
+        "inviter": inviter,
+        "direct": direct,
+        "indirect": indirect,
+        "unlocked": unlocked,
+        "referral_points": _points(db, user_id, ("referral", "referral_signup")),
+    }
+
+
+def referral_overview(db: Session) -> dict:
+    edges = int(db.scalar(select(func.count()).select_from(Referral)) or 0)
+    unlocked = int(db.scalar(select(func.count()).select_from(Referral).where(Referral.status == "unlocked")) or 0)
+    return {
+        "total_points": int(db.scalar(select(func.coalesce(func.sum(PointsLedger.delta), 0))) or 0),
+        "edges": edges,
+        "unlocked": unlocked,
+        "pending": edges - unlocked,
+        "with_code": int(db.scalar(select(func.count()).select_from(User).where(User.referral_code.isnot(None))) or 0),
+    }
+
+
+def top_referrers(db: Session, limit: int = 20) -> list[dict]:
+    rows = db.execute(
+        select(
+            Referral.inviter_id,
+            func.count().label("direct"),
+            func.sum(case((Referral.status == "unlocked", 1), else_=0)).label("unlocked"),
+        )
+        .group_by(Referral.inviter_id)
+        .order_by(func.count().desc())
+        .limit(limit)
+    ).all()
+    out = []
+    for inviter_id, direct, unlocked in rows:
+        u = db.get(User, inviter_id)
+        out.append({
+            "user_id": inviter_id,
+            "username": (u.username if u else None),
+            "telegram_id": (u.telegram_id if u else None),
+            "direct": int(direct or 0),
+            "unlocked": int(unlocked or 0),
+            "points": _points(db, inviter_id),
+        })
+    return out

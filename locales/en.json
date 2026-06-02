@@ -222,7 +222,8 @@
       "audit": "Audit log",
       "settings": "Settings",
       "logout": "Sign out",
-      "miniapp": "Mini App"
+      "miniapp": "Mini App",
+      "referrals": "Referrals"
     },
     "users": {
       "title": "Users",
@@ -270,7 +271,15 @@
       "size": "Size",
       "status_": "Status ",
       "token": "Token",
-      "value": "Value"
+      "value": "Value",
+      "rewards": "Rewards & referrals",
+      "points": "Points",
+      "referral_code": "Referral code",
+      "invited_by": "Invited by",
+      "direct_refs": "Direct referrals",
+      "indirect_refs": "Indirect",
+      "unlocked_refs": "Unlocked",
+      "referral_points": "Referral points"
     },
     "metrics": {
       "title": "Overview",
@@ -347,6 +356,19 @@
       "welcome_title": "Welcome banner (shown on /start)",
       "welcome_none": "No welcome banner yet — it is generated automatically, or upload one below.",
       "welcome_note": "This image appears at the top of the bot's /start screen. “Regenerate” drops it so the Mini App service re-creates it on its next start (within budget); uploading replaces it instantly."
+    },
+    "referrals": {
+      "title": "Referrals & points",
+      "total_points": "Total points issued",
+      "edges": "Referral links",
+      "unlocked": "Unlocked",
+      "pending": "Pending",
+      "with_code": "Users with a code",
+      "leaderboard": "Top referrers",
+      "referrer": "Referrer",
+      "direct": "Direct",
+      "points": "Points",
+      "none": "No referrals yet."
     }
   }
 }

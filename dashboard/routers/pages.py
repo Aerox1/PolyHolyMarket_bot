@@ -170,7 +170,14 @@ def user_detail(
     if detail is None:
         raise HTTPException(status_code=404, detail="User not found")
     positions = _live_positions(detail["accounts"])
-    return deps.render(request, "user_detail.html", admin=admin, detail=detail, positions=positions)
+    return deps.render(request, "user_detail.html", admin=admin, detail=detail, positions=positions,
+                       rewards=repo.user_rewards(db, user_id))
+
+
+@router.get("/referrals")
+def referrals_page(request: Request, admin: Admin = Depends(require_admin), db: Session = Depends(get_db)):
+    return deps.render(request, "referrals.html", admin=admin,
+                       overview=repo.referral_overview(db), leaders=repo.top_referrers(db, 25))
 
 
 @router.post("/users/{user_id}/status")

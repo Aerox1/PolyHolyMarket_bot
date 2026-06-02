@@ -47,6 +47,46 @@
     </div>
   </div>
 
+  {# ── Rewards & referrals ──────────────────────────────────────────────── #}
+  <div class="card">
+    <div class="card-header"><h2>{{ t('dash.users.rewards') }}</h2></div>
+    <div class="card-body">
+      <div class="metrics">
+        <div class="metric">
+          <div class="metric-label">{{ t('dash.users.points') }}</div>
+          <div class="metric-value"><bdi class="ltr">{{ '{:,}'.format(rewards.points) }}</bdi></div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">{{ t('dash.users.direct_refs') }}</div>
+          <div class="metric-value blue"><bdi class="ltr">{{ rewards.direct }}</bdi></div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">{{ t('dash.users.unlocked_refs') }}</div>
+          <div class="metric-value green"><bdi class="ltr">{{ rewards.unlocked }}</bdi></div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">{{ t('dash.users.indirect_refs') }}</div>
+          <div class="metric-value"><bdi class="ltr">{{ rewards.indirect }}</bdi></div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">{{ t('dash.users.referral_points') }}</div>
+          <div class="metric-value"><bdi class="ltr">{{ '{:,}'.format(rewards.referral_points) }}</bdi></div>
+        </div>
+      </div>
+      <dl class="dl" style="margin-top:12px;">
+        <dt>{{ t('dash.users.referral_code') }}</dt>
+        <dd><bdi class="mono ltr">{{ rewards.referral_code or '—' }}</bdi></dd>
+        <dt>{{ t('dash.users.invited_by') }}</dt>
+        <dd>
+          {% if rewards.inviter %}
+            <a href="/users/{{ rewards.inviter.id }}">{{ rewards.inviter.username or ('#' ~ rewards.inviter.id) }}</a>
+            <bdi class="mono ltr muted">{{ rewards.inviter.telegram_id }}</bdi>
+          {% else %}—{% endif %}
+        </dd>
+      </dl>
+    </div>
+  </div>
+
   {# ── Accounts (public columns only — NEVER any key) ───────────────────── #}
   <div class="card">
     <div class="card-header"><h2>{{ t('dash.users.accounts') }}</h2></div>

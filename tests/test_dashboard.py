@@ -99,6 +99,13 @@ def test_miniapp_admin_page(client, seeded):
     assert "Gemini" in r.text or "budget" in r.text.lower()
 
 
+def test_referrals_page_renders(client, seeded):
+    _login(client, "s3cret!")
+    r = client.get("/referrals")
+    assert r.status_code == 200
+    assert "referr" in r.text.lower()  # leaderboard / overview rendered
+
+
 def test_user_detail_never_leaks_key_material(client, seeded):
     _login(client, "s3cret!")
     r = client.get(f"/users/{seeded['user_id']}")
