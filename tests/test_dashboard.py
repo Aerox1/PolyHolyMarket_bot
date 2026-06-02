@@ -106,6 +106,26 @@ def test_referrals_page_renders(client, seeded):
     assert "referr" in r.text.lower()  # leaderboard / overview rendered
 
 
+def test_user_detail_lists_referees(client, seeded):
+    from sqlalchemy import select
+
+    from db.models import Referral, User
+    inviter_id = seeded["user_id"]
+    with SessionLocal() as s:
+        invitee = s.scalar(select(User).where(User.telegram_id == 9990002))
+        if invitee is None:
+            invitee = User(telegram_id=9990002, username="referee1", language="en", referred_by=inviter_id)
+            s.add(invitee)
+            s.flush()
+        if s.scalar(select(Referral).where(Referral.invitee_id == invitee.id)) is None:
+            s.add(Referral(inviter_id=inviter_id, invitee_id=invitee.id, status="pending"))
+        s.commit()
+    _login(client, "s3cret!")
+    r = client.get(f"/users/{inviter_id}")
+    assert r.status_code == 200
+    assert "referee1" in r.text  # the referee appears in the Referees card
+
+
 def test_user_detail_never_leaks_key_material(client, seeded):
     _login(client, "s3cret!")
     r = client.get(f"/users/{seeded['user_id']}")

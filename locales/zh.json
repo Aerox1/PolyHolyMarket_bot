@@ -279,7 +279,11 @@
       "direct_refs": "直接推荐",
       "indirect_refs": "间接",
       "unlocked_refs": "已解锁",
-      "referral_points": "推荐积分"
+      "referral_points": "推荐积分",
+      "referees": "被推荐人",
+      "referee": "被推荐人",
+      "ref_bets": "下注数",
+      "ref_joined": "加入时间"
     },
     "metrics": {
       "title": "概览",

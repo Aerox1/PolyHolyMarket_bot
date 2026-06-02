@@ -279,7 +279,11 @@
       "direct_refs": "معرفی‌های مستقیم",
       "indirect_refs": "غیرمستقیم",
       "unlocked_refs": "باز شده",
-      "referral_points": "امتیاز معرفی"
+      "referral_points": "امتیاز معرفی",
+      "referees": "دعوت‌شدگان",
+      "referee": "دعوت‌شده",
+      "ref_bets": "شرط‌ها",
+      "ref_joined": "تاریخ عضویت"
     },
     "metrics": {
       "title": "نمای کلی",

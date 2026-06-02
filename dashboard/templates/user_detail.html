@@ -87,6 +87,39 @@
     </div>
   </div>
 
+  {# ── Referees (the users this user referred) ──────────────────────────── #}
+  <div class="card">
+    <div class="card-header"><h2>{{ t('dash.users.referees') }}</h2></div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>{{ t('dash.users.referee') }}</th>
+            <th>{{ t('dash.users.status') }}</th>
+            <th class="right">{{ t('dash.users.ref_bets') }}</th>
+            <th>{{ t('dash.users.ref_joined') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in referees %}
+          <tr>
+            <td><a href="/users/{{ r.user_id }}">{{ r.username or ('#' ~ r.user_id) }}</a>
+                <bdi class="mono ltr muted">{{ r.telegram_id or '' }}</bdi></td>
+            <td>
+              {% if r.status == 'unlocked' %}<span class="status-pill active">{{ t('dash.referrals.unlocked') }}</span>
+              {% else %}<span class="status-pill muted">{{ t('dash.referrals.pending') }}</span>{% endif %}
+            </td>
+            <td class="right"><bdi class="ltr">{{ r.bets }} / {{ rewards.unlock_bets }}</bdi></td>
+            <td>{{ dt(r.created_at) }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4"><div class="empty">{{ t('dash.referrals.none') }}</div></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
   {# ── Accounts (public columns only — NEVER any key) ───────────────────── #}
   <div class="card">
     <div class="card-header"><h2>{{ t('dash.users.accounts') }}</h2></div>

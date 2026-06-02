@@ -279,7 +279,11 @@
       "direct_refs": "Direct referrals",
       "indirect_refs": "Indirect",
       "unlocked_refs": "Unlocked",
-      "referral_points": "Referral points"
+      "referral_points": "Referral points",
+      "referees": "Referees",
+      "referee": "Referee",
+      "ref_bets": "Bets",
+      "ref_joined": "Joined"
     },
     "metrics": {
       "title": "Overview",

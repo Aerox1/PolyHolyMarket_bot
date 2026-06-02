@@ -279,7 +279,11 @@
       "direct_refs": "Прямые рефералы",
       "indirect_refs": "Косвенные",
       "unlocked_refs": "Разблокировано",
-      "referral_points": "Очки за рефералов"
+      "referral_points": "Очки за рефералов",
+      "referees": "Приглашённые",
+      "referee": "Приглашённый",
+      "ref_bets": "Ставки",
+      "ref_joined": "Присоединился"
     },
     "metrics": {
       "title": "Обзор",

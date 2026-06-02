@@ -171,7 +171,7 @@ def user_detail(
         raise HTTPException(status_code=404, detail="User not found")
     positions = _live_positions(detail["accounts"])
     return deps.render(request, "user_detail.html", admin=admin, detail=detail, positions=positions,
-                       rewards=repo.user_rewards(db, user_id))
+                       rewards=repo.user_rewards(db, user_id), referees=repo.user_referees(db, user_id))
 
 
 @router.get("/referrals")

@@ -14,8 +14,9 @@ from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from core.config import settings
-from db.models import Account, AuditLog, Category, Order, PointsLedger, Referral, Trade, User, UserStatus
+from db.models import Account, AuditLog, Category, Order, PointsLedger, Referral, Trade, User, UserStats, UserStatus
 from db.repositories import appconfig, gemini_usage
+from db.repositories.rewards import REFERRAL_UNLOCK_BETS
 
 
 def _today_start() -> datetime:
@@ -374,7 +375,28 @@ def user_rewards(db: Session, user_id: int) -> dict:
         "indirect": indirect,
         "unlocked": unlocked,
         "referral_points": _points(db, user_id, ("referral", "referral_signup")),
+        "unlock_bets": REFERRAL_UNLOCK_BETS,
     }
+
+
+def user_referees(db: Session, user_id: int, limit: int = 50) -> list[dict]:
+    """The people this user referred (invitees), with unlock status + bets-to-unlock."""
+    rows = db.execute(
+        select(
+            Referral.invitee_id, Referral.status, Referral.created_at, Referral.unlocked_at,
+            User.username, User.telegram_id, func.coalesce(UserStats.total_bets, 0),
+        )
+        .join(User, User.id == Referral.invitee_id)
+        .outerjoin(UserStats, UserStats.user_id == Referral.invitee_id)
+        .where(Referral.inviter_id == user_id)
+        .order_by(Referral.created_at.desc())
+        .limit(limit)
+    ).all()
+    return [
+        {"user_id": invitee_id, "username": username, "telegram_id": tg,
+         "status": status, "created_at": created, "unlocked_at": unlocked, "bets": int(bets or 0)}
+        for invitee_id, status, created, unlocked, username, tg, bets in rows
+    ]
 
 
 def referral_overview(db: Session) -> dict:
