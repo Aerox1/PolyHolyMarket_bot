@@ -57,10 +57,12 @@ async def render_item(
         category_tag_slug=(cat.tag_slug if cat else None),
         hint_market_id=item.market_id,
     )
+    # The deep-link always points at this item (n-<id>); the cached market only
+    # changes the channel button's label (Trade vs Open) at publish time.
+    if bot_username:
+        item.cta_url = cta_mod.news_deeplink(bot_username, item_id=item.id)
     if market_id:
         item.cta_market_id = market_id
-        if bot_username:
-            item.cta_url = cta_mod.news_deeplink(bot_username, item_id=item.id, market_id=market_id)
         item.cta_resolved_at = datetime.now(timezone.utc)
 
     # 3) image: a source hero is publish-ready as-is; AI/Pillow compositing is a

@@ -191,6 +191,12 @@
     "nav": {
       "home": "🏠 主菜单",
       "back": "⬅️ 返回"
+    },
+    "news": {
+      "nfa_footer": "📰 仅供参考，非投资建议。",
+      "cta_trade": "📈 交易此市场",
+      "cta_open": "📰 在机器人中打开",
+      "source": "来源"
     }
   },
   "dash": {

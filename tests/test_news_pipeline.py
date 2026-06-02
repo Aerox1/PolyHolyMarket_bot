@@ -26,7 +26,7 @@ def _afn(value):
 # ── CTA ──────────────────────────────────────────────────────────────────────
 
 def test_news_deeplink():
-    assert news_cta.news_deeplink("Bot", item_id=5, market_id="0xabc") == "https://t.me/Bot?start=nm-0xabc"
+    # carries the item id (short), not the 66-char conditionId (exceeds the 64-char cap)
     assert news_cta.news_deeplink("Bot", item_id=5) == "https://t.me/Bot?start=n-5"
 
 
@@ -67,7 +67,7 @@ async def test_render_item_success(monkeypatch):
         assert item.status == "ready"
         assert set(item.translations) == {"en", "fa"}
         assert item.cta_market_id == "0xmkt"
-        assert item.cta_url == "https://t.me/TestBot?start=nm-0xmkt"
+        assert item.cta_url == f"https://t.me/TestBot?start=n-{item.id}"  # item id, not the 66-char cond id
         assert item.cta_resolved_at is not None
         assert item.image_status == "ready"  # hero present
 
@@ -83,7 +83,8 @@ async def test_render_item_passthrough_when_translation_unavailable(monkeypatch)
         assert item.status == "ready"
         assert item.translations == {"en": {"title": "Headline", "summary": "Body text"}}
         assert item.cta_market_id is None
-        assert item.cta_url is None
+        # deep-link still set (opens the item in-bot) even without a market CTA
+        assert item.cta_url == f"https://t.me/TestBot?start=n-{item.id}"
         assert item.image_status == "none"  # no hero, no AI image in Phase 2
 
 
@@ -190,4 +191,4 @@ def test_register_news_jobs_enabled(monkeypatch):
     monkeypatch.setattr(news_jobs.settings, "news_pipeline_enabled", True)
     calls: list = []
     news_jobs.register_news_jobs(_recording_app(calls))
-    assert set(calls) == {"news_crawl", "news_render"}
+    assert set(calls) == {"news_crawl", "news_render", "news_publish"}

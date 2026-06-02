@@ -6,7 +6,7 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.models import NewsItem
+from db.models import NewsChannelPost, NewsItem
 
 # statuses the render job processes (admin-approved → through transient states)
 RENDERABLE = ("approved", "translating", "rendering")
@@ -52,3 +52,31 @@ async def ready_to_publish(session: AsyncSession, limit: int = 20) -> list[NewsI
         select(NewsItem).where(NewsItem.status == "ready")
         .order_by(NewsItem.score.desc(), NewsItem.id.asc()).limit(limit)
     ))
+
+
+async def channel_post(session: AsyncSession, item_id: int, chat_id: int, lang: str) -> NewsChannelPost | None:
+    return await session.scalar(select(NewsChannelPost).where(
+        NewsChannelPost.news_item_id == item_id,
+        NewsChannelPost.chat_id == chat_id,
+        NewsChannelPost.lang == lang,
+    ))
+
+
+async def already_posted(session: AsyncSession, item_id: int, chat_id: int, lang: str) -> bool:
+    return (await channel_post(session, item_id, chat_id, lang)) is not None
+
+
+def record_channel_post(session: AsyncSession, *, item_id: int, chat_id: int, message_id: int | None, lang: str) -> None:
+    session.add(NewsChannelPost(news_item_id=item_id, chat_id=chat_id, message_id=message_id, lang=lang))
+
+
+async def delete_channel_post(session: AsyncSession, item_id: int, chat_id: int, lang: str) -> None:
+    row = await channel_post(session, item_id, chat_id, lang)
+    if row is not None:
+        await session.delete(row)
+
+
+async def set_channel_post_message_id(session: AsyncSession, item_id: int, chat_id: int, lang: str, message_id: int) -> None:
+    row = await channel_post(session, item_id, chat_id, lang)
+    if row is not None:
+        row.message_id = message_id

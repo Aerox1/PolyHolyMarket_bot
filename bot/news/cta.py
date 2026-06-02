@@ -37,9 +37,11 @@ async def best_market_id(
     return None
 
 
-def news_deeplink(bot_username: str, *, item_id: int, market_id: str | None = None) -> str:
-    """t.me deep-link back into the bot. ``nm-<cond>`` jumps to the market panel
-    (tap-to-trade); ``n-<item>`` opens the news item. Mirrors start.py's start-arg
-    convention."""
-    payload = f"nm-{market_id}" if market_id else f"n-{item_id}"
-    return f"https://t.me/{bot_username}?start={payload}"
+def news_deeplink(bot_username: str, *, item_id: int) -> str:
+    """t.me deep-link back into the bot, carrying the NEWS ITEM id (``n-<id>``).
+
+    The market id is NOT encoded directly: a Polymarket conditionId is 66 chars
+    and Telegram caps the start payload at 64. Instead /start loads the item and
+    routes to its cached ``cta_market_id`` (tap-to-trade) when present, else opens
+    the bot. Mirrors start.py's start-arg convention (``r-<code>``)."""
+    return f"https://t.me/{bot_username}?start=n-{item_id}"

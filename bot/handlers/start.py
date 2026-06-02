@@ -156,19 +156,42 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE, *, 
 
 # ── handlers ──────────────────────────────────────────────────────────────────
 
+async def _open_news_item(update: Update, context: ContextTypes.DEFAULT_TYPE, item_id: int) -> None:
+    """News-channel CTA target: route to the item's cached market (tap-to-trade)
+    if one was resolved, else fall back to the dashboard."""
+    from db.models import NewsItem
+    async with async_session_scope() as s:
+        item = await s.get(NewsItem, item_id)
+        market_id = item.cta_market_id if item else None
+    if market_id:
+        # show_market_by_id already replies (panel, or not-found/error) — don't
+        # also dump the dashboard on top of a not-found reply.
+        await discover.show_market_by_id(update, context, market_id)
+        return
+    await show_dashboard(update, context)
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """/start [r-<code>] — attribute referral (if any) and show the dashboard."""
+    """/start [r-<code> | n-<item_id>] — attribute referral or open a news item's
+    market, otherwise show the dashboard."""
     try:
         ref_code = None
+        news_item_id = None
         for a in (context.args or []):
-            if a.lower().startswith("r-"):
+            al = a.lower()
+            if al.startswith("r-"):
                 ref_code = a[2:]
+            elif al.startswith("n-") and a[2:].isdigit():
+                news_item_id = int(a[2:])
         if ref_code:
             tg = update.effective_user
             async with async_session_scope() as s:
                 user = await users_repo.get_user(s, tg.id)
                 if user:
                     await rewards_repo.attribute_referral(s, user, ref_code)
+        if news_item_id is not None:
+            await _open_news_item(update, context, news_item_id)
+            return
         await show_dashboard(update, context)
     except Exception as exc:  # noqa: BLE001
         logger.warning("start failed: %s", type(exc).__name__)

@@ -191,6 +191,12 @@
     "nav": {
       "home": "🏠 Dashboard",
       "back": "⬅️ Back"
+    },
+    "news": {
+      "nfa_footer": "📰 Informational only — not financial advice.",
+      "cta_trade": "📈 Trade this market",
+      "cta_open": "📰 Open in bot",
+      "source": "Source"
     }
   },
   "dash": {

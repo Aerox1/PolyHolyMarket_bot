@@ -222,23 +222,31 @@ async def search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _show_markets(update, context, mkts, header_key="bot.discover.trending_header")
 
 
+async def show_market_by_id(update: Update, context: ContextTypes.DEFAULT_TYPE, market_id: str) -> bool:
+    """Fetch a single market by conditionId, stash it as a fresh generation, and
+    show its Buy panel. Returns False (after a reply) if not found/unavailable.
+    Reused by the /market command and the news-channel CTA deep-link."""
+    await common.typing(update, context)
+    try:
+        m = await asyncio.to_thread(markets.get_market, market_id)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("market failed: %s", type(exc).__name__)
+        await common.reply(update, context, "bot.error.generic", reply_markup=common.with_nav(context))
+        return False
+    if not m:
+        await common.reply(update, context, "bot.market.not_found", reply_markup=common.with_nav(context))
+        return False
+    gen = _new_gen(context)
+    common.stash(context, _MKTS, [m])
+    await _show_panel(update, context, m, gen, 0)
+    return True
+
+
 async def market(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not context.args:
         await common.reply(update, context, "bot.market.market_usage", reply_markup=common.with_nav(context))
         return
-    await common.typing(update, context)
-    try:
-        m = await asyncio.to_thread(markets.get_market, context.args[0])
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("market failed: %s", type(exc).__name__)
-        await common.reply(update, context, "bot.error.generic", reply_markup=common.with_nav(context))
-        return
-    if not m:
-        await common.reply(update, context, "bot.market.not_found", reply_markup=common.with_nav(context))
-        return
-    gen = _new_gen(context)
-    common.stash(context, _MKTS, [m])
-    await _show_panel(update, context, m, gen, 0)
+    await show_market_by_id(update, context, context.args[0])
 
 
 async def on_buy(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
