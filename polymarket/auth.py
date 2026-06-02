@@ -80,14 +80,18 @@ def validate_and_derive(
     except Exception as exc:
         raise ConnectError(f"Invalid private key ({type(exc).__name__}).") from None
 
-    # Verify the key controls the claimed wallet.
+    # Derive the SIGNER address from the key. We no longer require the user to
+    # type it — the key is the source of truth (a wallet_address arg, if given,
+    # is still cross-checked for backward compatibility).
     try:
         derived = client.get_address()
     except Exception as exc:
         raise ConnectError(f"Could not derive address ({type(exc).__name__}).") from None
     if wallet_address and derived and derived.lower() != wallet_address.lower():
         raise WalletMismatchError(derived, wallet_address)
-    resolved_wallet = wallet_address or derived
+    # The ACCOUNT address (where positions/balance live, shown to the user) is the
+    # funder for proxy/Safe accounts, else the signer EOA.
+    resolved_wallet = wallet_address or funder_address or derived
 
     # Derive L2 API creds.
     api_key = api_secret = api_passphrase = None

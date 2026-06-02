@@ -33,14 +33,25 @@ from db.engine import async_session_scope
 from db.repositories import accounts as accounts_repo
 from db.repositories import users as users_repo
 from polymarket import auth
-from polymarket.credentials import WalletMismatchError
 
 logger = logging.getLogger(__name__)
 
 # ── Conversation states ───────────────────────────────────────────────────────
-CHOOSE_TYPE, ENTER_ADDRESS, ENTER_FUNDER, ENTER_KEY, RETRY = range(5)
+# No ENTER_ADDRESS: the signer address is derived from the key, not typed.
+CHOOSE_TYPE, ENTER_FUNDER, ENTER_KEY, RETRY = range(4)
 
 _PROXY_TYPES = (1, 2)  # signature types that require a funder address
+
+
+def _nav_kb(context: ContextTypes.DEFAULT_TYPE, *, back_to: str | None = None) -> InlineKeyboardMarkup:
+    """[⬅️ Back][✖ Cancel] for a connect step so the user is never stuck typing
+    /cancel. ``back_to`` is 'type' or 'funder' (the step to return to)."""
+    row = []
+    if back_to:
+        row.append(InlineKeyboardButton(common.tr(context, "bot.connect.nav_back"),
+                                        callback_data=f"conn:to_{back_to}"))
+    row.append(InlineKeyboardButton(common.tr(context, "bot.connect.nav_cancel"), callback_data="conn:cancel"))
+    return InlineKeyboardMarkup([row])
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -67,10 +78,12 @@ def _short(address: str) -> str:
 
 
 def _type_keyboard(context: ContextTypes.DEFAULT_TYPE) -> InlineKeyboardMarkup:
+    # Order matches the prompt body: Email/Magic (most common) first, so a typical
+    # email user taps it instead of falling into the EOA path by default.
     return InlineKeyboardMarkup(
         [
-            [InlineKeyboardButton(common.tr(context, "bot.connect.type_eoa"), callback_data="ctype:0")],
             [InlineKeyboardButton(common.tr(context, "bot.connect.type_proxy"), callback_data="ctype:1")],
+            [InlineKeyboardButton(common.tr(context, "bot.connect.type_eoa"), callback_data="ctype:0")],
             [InlineKeyboardButton(common.tr(context, "bot.connect.type_safe"), callback_data="ctype:2")],
         ]
     )
@@ -109,29 +122,18 @@ async def choose_type(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         sig_type = 0
 
     context.user_data["connect"] = {"sig_type": sig_type}
-    await query.message.reply_text(
-        common.tr(context, "bot.connect.enter_address"),
-        parse_mode="Markdown",
-    )
-    return ENTER_ADDRESS
 
-
-# ── ENTER_ADDRESS ─────────────────────────────────────────────────────────────
-
-async def enter_address(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    address = (update.message.text or "").strip()
-    if not await asyncio.to_thread(auth.is_valid_address, address):
-        await common.reply(update, context, "bot.connect.bad_address")
-        return ENTER_ADDRESS
-
-    state = context.user_data.setdefault("connect", {})
-    state["address"] = address
-
-    if state.get("sig_type") in _PROXY_TYPES:
-        await common.reply(update, context, "bot.connect.enter_funder")
+    # Proxy/Safe accounts hold funds at a separate address → ask for the funder
+    # first. EOA wallets are their own account → go straight to the key.
+    if sig_type in _PROXY_TYPES:
+        await query.edit_message_text(
+            common.tr(context, "bot.connect.enter_funder"),
+            parse_mode="Markdown", reply_markup=_nav_kb(context, back_to="type"))
         return ENTER_FUNDER
 
-    await common.reply(update, context, "bot.connect.enter_private_key")
+    await query.edit_message_text(
+        common.tr(context, "bot.connect.enter_private_key"),
+        parse_mode="Markdown", reply_markup=_nav_kb(context, back_to="type"))
     return ENTER_KEY
 
 
@@ -140,14 +142,41 @@ async def enter_address(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 async def enter_funder(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     funder = (update.message.text or "").strip()
     if not await asyncio.to_thread(auth.is_valid_address, funder):
-        await common.reply(update, context, "bot.connect.bad_address")
+        await common.reply(update, context, "bot.connect.bad_address",
+                           reply_markup=_nav_kb(context, back_to="type"))
         return ENTER_FUNDER
 
     state = context.user_data.setdefault("connect", {})
     state["funder"] = funder
 
-    await common.reply(update, context, "bot.connect.enter_private_key")
+    await common.reply(update, context, "bot.connect.enter_private_key",
+                       reply_markup=_nav_kb(context, back_to="funder"))
     return ENTER_KEY
+
+
+# ── Back / Cancel navigation (inline buttons on every step) ───────────────────
+
+async def conn_nav(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+    action = (query.data or "").split(":", 1)[1] if ":" in (query.data or "") else ""
+    if action == "cancel":
+        _clear_connect(context)
+        try:
+            await query.edit_message_text(common.tr(context, "bot.connect.cancelled"))
+        except Exception:  # noqa: BLE001 — message may be uneditable
+            await query.message.reply_text(common.tr(context, "bot.connect.cancelled"))
+        return ConversationHandler.END
+    if action == "to_type":
+        context.user_data["connect"] = {}
+        await query.edit_message_text(common.tr(context, "bot.connect.choose_wallet_type"),
+                                      parse_mode="Markdown", reply_markup=_type_keyboard(context))
+        return CHOOSE_TYPE
+    if action == "to_funder":
+        await query.edit_message_text(common.tr(context, "bot.connect.enter_funder"),
+                                      parse_mode="Markdown", reply_markup=_nav_kb(context, back_to="type"))
+        return ENTER_FUNDER
+    return None  # unknown action → leave the conversation in its current state
 
 
 # ── ENTER_KEY (and RETRY re-entry) ────────────────────────────────────────────
@@ -179,10 +208,10 @@ async def enter_key(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             chat_id=chat_id,
             text=common.tr(context, "bot.connect.bad_key"),
             parse_mode="Markdown",
+            reply_markup=_nav_kb(context, back_to="funder" if state.get("funder") else "type"),
         )
         return ENTER_KEY
 
-    address = state.get("address")
     sig_type = int(state.get("sig_type", 0))
     funder = state.get("funder")
 
@@ -197,22 +226,15 @@ async def enter_key(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
     try:
         try:
+            # wallet_address=None → the signer address is derived from the key
+            # (no user-typed address, so no mismatch to fail on).
             result = await asyncio.to_thread(
                 auth.validate_and_derive,
                 private_key=private_key,
-                wallet_address=address,
+                wallet_address=None,
                 signature_type=sig_type,
                 funder_address=funder,
             )
-        except WalletMismatchError:
-            # No secret in this exception; do not log key material.
-            state.pop("key", None)
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text=common.tr(context, "bot.connect.mismatch"),
-                parse_mode="Markdown",
-            )
-            return RETRY
         except Exception as exc:  # noqa: BLE001 - includes auth.ConnectError
             logger.warning("Connect validation failed: %s", type(exc).__name__)
             state.pop("key", None)
@@ -220,6 +242,7 @@ async def enter_key(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                 chat_id=chat_id,
                 text=common.tr(context, "bot.connect.validation_failed"),
                 parse_mode="Markdown",
+                reply_markup=_nav_kb(context, back_to="funder" if state.get("funder") else "type"),
             )
             return RETRY
 
@@ -296,6 +319,14 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 
 async def on_timeout(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    # SECURITY: the timeout can fire while the user is on the key step; if they
+    # then paste their key it routes here, so delete the inbound message FIRST
+    # (mirror enter_key) before it lingers in the chat.
+    if update.message is not None:
+        try:
+            await update.message.delete()
+        except Exception as exc:  # noqa: BLE001 — never log message content
+            logger.warning("Could not delete message on connect timeout: %s", type(exc).__name__)
     _clear_connect(context)
     chat = update.effective_chat
     if chat is not None:
@@ -431,15 +462,22 @@ def register(application: Application) -> None:
             CallbackQueryHandler(start_connect, pattern="^menu:connect$"),
         ],
         states={
-            CHOOSE_TYPE: [CallbackQueryHandler(choose_type, pattern="^ctype:")],
-            ENTER_ADDRESS: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, enter_address)
+            CHOOSE_TYPE: [
+                CallbackQueryHandler(choose_type, pattern="^ctype:"),
+                CallbackQueryHandler(conn_nav, pattern="^conn:"),
             ],
             ENTER_FUNDER: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, enter_funder)
+                MessageHandler(filters.TEXT & ~filters.COMMAND, enter_funder),
+                CallbackQueryHandler(conn_nav, pattern="^conn:"),
             ],
-            ENTER_KEY: [MessageHandler(filters.TEXT & ~filters.COMMAND, enter_key)],
-            RETRY: [MessageHandler(filters.TEXT & ~filters.COMMAND, enter_key)],
+            ENTER_KEY: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, enter_key),
+                CallbackQueryHandler(conn_nav, pattern="^conn:"),
+            ],
+            RETRY: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, enter_key),
+                CallbackQueryHandler(conn_nav, pattern="^conn:"),
+            ],
             ConversationHandler.TIMEOUT: [
                 MessageHandler(filters.ALL, on_timeout),
                 CallbackQueryHandler(on_timeout),

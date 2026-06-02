@@ -24,24 +24,23 @@
       "back_to_connect": "When you're ready, tap *Connect Account*."
     },
     "connect": {
-      "choose_wallet_type": "🔗 *Connect your Polymarket wallet*\n\nFirst, which kind of wallet do you have? I'll then ask for 2–3 details.\n\n• *Email / Magic* — you signed up with email or Google (most common)\n• *MetaMask / hardware* — a browser or hardware wallet\n• *Gnosis Safe* — a multisig Safe\n\nNot sure? Choose *Email / Magic*.",
+      "choose_wallet_type": "🔗 *Connect your Polymarket wallet*\n\nWhich kind of wallet do you have?\n\n• *Email / Google (Magic)* — you signed up on polymarket.com with an email or Google account (most common)\n• *MetaMask / hardware* — a self-custody browser or hardware wallet\n• *Gnosis Safe* — a multisig Safe\n\nNot sure? Pick *Email / Google*.",
       "type_eoa": "MetaMask / hardware (EOA)",
       "type_proxy": "Email / Magic (Proxy)",
       "type_safe": "Gnosis Safe",
-      "enter_address": "📍 *Wallet address* (1 of 2–3)\n\nSend your *signer address* — the `0x…` address that controls your account (42 characters). This is the wallet your private key belongs to.",
       "bad_address": "⚠️ That doesn't look like a valid 0x address. Please try again.",
-      "enter_funder": "💰 *Funder address* (2 of 3)\n\nSend the address that actually holds your USDC on Polymarket — your *proxy / Safe* address. For email/Magic accounts this is your main Polymarket deposit address, which is *different* from the signer address above.",
-      "enter_private_key": "🔐 *Private key* (last step)\n\nSend the *private key* of the signer wallet (64 hex characters, with or without a `0x` prefix).\n\n⚠️ I *delete your message instantly* so it never stays in the chat, and your key is *encrypted* before storage. Never share it anywhere else.",
-      "key_deleted": "🔒 Key received and your message was deleted.",
+      "enter_funder": "💰 *Your Polymarket account address*\n\nPaste the `0x…` address that holds your funds on Polymarket — on polymarket.com open your profile; it's your deposit / account address (42 characters).\n\n(This is *not* your signing key's address — I work that one out from your key.)",
+      "enter_private_key": "🔐 *Your private key*\n\nPaste the *private key* of your wallet (64 hex characters, with or without `0x`).\n\nWhere to find it: on polymarket.com open your account → *Export private key*. MetaMask: ⋮ → Account details → Show private key.\n\n🔒 I *delete your message instantly* and *encrypt* the key before storing. Never share it anywhere else.",
       "key_delete_failed": "⚠️ I could not delete your message — please *delete it yourself now*.",
       "bad_key": "⚠️ That doesn't look like a valid private key. Send the 64-character hex key (a leading `0x` is fine).",
       "validating": "⏳ Validating your wallet and deriving API credentials…",
-      "mismatch": "❌ This private key does not control the wallet address you gave. Please check and try again.",
       "validation_failed": "❌ Could not validate the wallet. Please check your key and try again.",
       "success": "✅ *Connected!*\n\nWallet: `{wallet}`\nUSDC balance: ${balance}\n\nYou can now view positions and trade.",
       "cancelled": "Connection cancelled. Nothing was saved.",
       "timeout": "⌛ Connection timed out. Nothing was saved — start again with /connect.",
-      "default_label": "Main"
+      "default_label": "Main",
+      "nav_back": "⬅️ Back",
+      "nav_cancel": "✖ Cancel"
     },
     "disconnect": {
       "confirm": "Disconnect wallet `{wallet}`? Your stored key will be permanently deleted.",

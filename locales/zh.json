@@ -24,24 +24,23 @@
       "back_to_connect": "准备好后，请点击 *连接账户*。"
     },
     "connect": {
-      "choose_wallet_type": "🔗 *连接你的 Polymarket 钱包*\n\n首先,你使用的是哪种类型的钱包?随后我会再询问 2–3 项信息。\n\n• *Email / Magic* — 你通过邮箱或 Google 注册(最常见)\n• *MetaMask / 硬件* — 浏览器钱包或硬件钱包\n• *Gnosis Safe* — 多签 Safe\n\n不确定?请选择 *Email / Magic*。",
+      "choose_wallet_type": "🔗 *连接你的 Polymarket 钱包*\n\n你用的是哪种钱包？\n\n• *邮箱 / 谷歌 (Magic)* — 你在 polymarket.com 用邮箱或谷歌账号注册（最常见）\n• *MetaMask / 硬件* — 浏览器或硬件钱包\n• *Gnosis Safe* — 多签 Safe\n\n不确定？选择 *邮箱 / 谷歌*。",
       "type_eoa": "MetaMask / 硬件钱包（EOA）",
       "type_proxy": "邮箱 / Magic（Proxy）",
       "type_safe": "Gnosis Safe",
-      "enter_address": "📍 *钱包地址*(第 1 项,共 2–3 项)\n\n请发送你的 *签名地址* —— 控制你账户的那个 `0x…` 地址(42 个字符)。这是你私钥所对应的钱包。",
       "bad_address": "⚠️ 这看起来不是有效的 0x 地址。请重试。",
-      "enter_funder": "💰 *资金地址*(第 2 项,共 3 项)\n\n请发送在 Polymarket 上实际持有你 USDC 的地址 —— 也就是你的 *代理 / Safe* 地址。对于 email/Magic 账户,这是你的主 Polymarket 充值地址,它与上面的签名地址 *不同*。",
-      "enter_private_key": "🔐 *私钥*(最后一步)\n\n请发送签名钱包的 *私钥*(64 个十六进制字符,带不带 `0x` 前缀都可以)。\n\n⚠️ 我会 *立即删除你的消息*,使其绝不会留在聊天记录中,并且你的私钥在存储前会被 *加密*。切勿在任何其他地方分享它。",
-      "key_deleted": "🔒 已收到私钥，您的消息已被删除。",
+      "enter_funder": "💰 *你的 Polymarket 账户地址*\n\n发送持有你 Polymarket 资金的 `0x…` 地址 —— 在 polymarket.com 打开个人资料，这是你的充值/账户地址（42 个字符）。\n\n（这*不是*你签名密钥的地址 —— 那个我会从你的密钥推算出来。）",
+      "enter_private_key": "🔐 *你的私钥*\n\n发送你钱包的*私钥*（64 位十六进制，带不带 `0x` 都行）。\n\n在哪里找：在 polymarket.com 打开账户 → *导出私钥*。MetaMask：⋮ → 账户详情 → 显示私钥。\n\n🔒 我会*立即删除*你的消息，并在存储前*加密*密钥。切勿在别处分享。",
       "key_delete_failed": "⚠️ 我无法删除您的消息——请*立即自行删除*。",
       "bad_key": "⚠️ 这看起来不是有效的私钥。请发送 64 个字符的十六进制私钥(开头带 `0x` 也可以)。",
       "validating": "⏳ 正在验证您的钱包并派生 API 凭据…",
-      "mismatch": "❌ 此私钥并不控制您提供的钱包地址。请核对后重试。",
       "validation_failed": "❌ 无法验证钱包。请核对您的私钥后重试。",
       "success": "✅ *已连接！*\n\n钱包：`{wallet}`\nUSDC 余额：${balance}\n\n您现在可以查看持仓并进行交易。",
       "cancelled": "连接已取消，未保存任何内容。",
       "timeout": "⌛ 连接超时。未保存任何内容——请使用 /connect 重新开始。",
-      "default_label": "主账户"
+      "default_label": "主账户",
+      "nav_back": "⬅️ 返回",
+      "nav_cancel": "✖ 取消"
     },
     "disconnect": {
       "confirm": "断开钱包 `{wallet}` 的连接？您存储的私钥将被永久删除。",
