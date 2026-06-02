@@ -23,6 +23,7 @@ from polymarket.account_manager import AccountManager
 
 from bot import jobs, middleware
 from bot.handlers import confirm, connect, discover, inquiry, positions_ui, start, trading
+from bot.news import jobs as news_jobs
 
 logger = logging.getLogger(__name__)
 
@@ -108,8 +109,10 @@ def build_application() -> Application:
     positions_ui.register(app)
     confirm.register(app)  # ^ord_ok: / ^ord_no: confirmation callbacks
 
-    # Background jobs (broadcast delivery, …)
+    # Background jobs (broadcast delivery, settlement, …)
     jobs.register_jobs(app)
+    # News pipeline jobs (crawl + render) — no-op unless NEWS_PIPELINE_ENABLED=1
+    news_jobs.register_news_jobs(app)
 
     return app
 

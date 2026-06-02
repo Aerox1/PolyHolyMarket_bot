@@ -90,6 +90,8 @@ class Settings(BaseSettings):
     cards_dir: str = Field("data/cards", alias="CARDS_DIR")
 
     # ── News pipeline ─────────────────────────────────────
+    # Master switch — when false, the crawl/render/publish jobs are NOT registered.
+    news_pipeline_enabled: bool = Field(False, alias="NEWS_PIPELINE_ENABLED")
     # Job cadences (seconds) on the bot JobQueue.
     news_crawl_interval_seconds: int = Field(900, alias="NEWS_CRAWL_INTERVAL_SECONDS")
     news_render_interval_seconds: int = Field(120, alias="NEWS_RENDER_INTERVAL_SECONDS")
