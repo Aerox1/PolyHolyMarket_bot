@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% set active_nav = 'news' %}
+{% block title %}{{ t('dash.news.item') }}{% endblock %}
+
+{% block content %}
+  <div class="page-head">
+    <h1 class="page-title">{{ t('dash.news.item') }}</h1>
+    <a class="btn sm" href="/news">{{ t('dash.news.back') }}</a>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h2>{{ t('dash.news.original') }}</h2>
+      <span class="status-pill">{{ item.status }}</span></div>
+    <div class="card-body">
+      <p><b><bdi dir="auto">{{ item.title }}</bdi></b></p>
+      <p class="muted" dir="auto" style="white-space:pre-wrap">{{ (item.body_orig or '')[:1500] }}</p>
+      <dl class="dl">
+        <dt>{{ t('dash.news.source') }}</dt>
+        <dd><a href="{{ item.url }}" target="_blank" rel="noopener noreferrer"><bdi class="ltr mono">{{ item.url[:90] }}</bdi></a></dd>
+        <dt>{{ t('dash.news.cta') }}</dt>
+        <dd>{% if item.cta_url %}<bdi class="ltr mono">{{ item.cta_url }}</bdi>{% else %}—{% endif %}</dd>
+        <dt>{{ t('dash.news.score') }}</dt>
+        <dd><bdi class="ltr">{{ '%.2f' | format(item.score) }}</bdi></dd>
+      </dl>
+      <form method="POST" action="/news/{{ item.id }}/action" style="display:flex; gap:8px; flex-wrap:wrap">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="btn success" name="action" value="approve">{{ t('dash.news.approve') }}</button>
+        <button class="btn warn" name="action" value="unapprove">{{ t('dash.news.unapprove') }}</button>
+        <button class="btn danger" name="action" value="reject">{{ t('dash.news.reject') }}</button>
+        <button class="btn" name="action" value="rerender">{{ t('dash.news.rerender') }}</button>
+        <button class="btn" name="action" value="regen_image">{{ t('dash.news.regen_image') }}</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h2>{{ t('dash.news.translations') }}</h2></div>
+    <div class="card-body">
+      <form method="POST" action="/news/{{ item.id }}/translations">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        {% for lang in langs %}
+        {% set tr = item.translations.get(lang, {}) %}
+        <fieldset style="margin-bottom:12px; padding:8px; border:1px solid #2a2a2a; border-radius:8px">
+          <legend><bdi class="ltr">{{ lang | upper }}</bdi></legend>
+          <input type="text" name="title_{{ lang }}" value="{{ tr.get('title','') }}" placeholder="title"
+                 style="width:100%; margin-bottom:6px" {% if lang == 'fa' %}dir="rtl"{% endif %}>
+          <textarea name="summary_{{ lang }}" rows="3" placeholder="summary"
+                    style="width:100%" {% if lang == 'fa' %}dir="rtl"{% endif %}>{{ tr.get('summary','') }}</textarea>
+        </fieldset>
+        {% endfor %}
+        <button class="btn success" type="submit">{{ t('dash.news.save') }}</button>
+      </form>
+    </div>
+  </div>
+{% endblock %}

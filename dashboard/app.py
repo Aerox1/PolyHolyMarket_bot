@@ -49,10 +49,11 @@ def create_app() -> FastAPI:
 
     # Routers (each module exposes `router`).
     from dashboard import auth
-    from dashboard.routers import pages
+    from dashboard.routers import news, pages
 
     app.include_router(auth.router)
     app.include_router(pages.router)
+    app.include_router(news.router)
 
     @app.on_event("startup")
     def _bootstrap() -> None:

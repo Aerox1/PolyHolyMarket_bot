@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% set active_nav = 'news' %}
+{% block title %}{{ t('dash.news.sources') }}{% endblock %}
+
+{% block content %}
+  <div class="page-head">
+    <h1 class="page-title">{{ t('dash.news.sources') }}</h1>
+    <a class="btn sm" href="/news">{{ t('dash.news.back') }}</a>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h2>{{ t('dash.news.add_source') }}</h2></div>
+    <div class="card-body">
+      <form method="POST" action="/news/sources" style="display:flex; gap:10px; flex-wrap:wrap; align-items:end">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <label>{{ t('dash.news.name') }}<br><input type="text" name="name"></label>
+        <label>{{ t('dash.news.url') }}<br><input type="url" name="url" required style="min-width:280px"></label>
+        <label>{{ t('dash.news.kind') }}<br>
+          <select name="kind"><option value="auto">auto</option><option value="rss">rss</option><option value="html">html</option></select>
+        </label>
+        <label>{{ t('dash.news.category') }}<br>
+          <select name="category_id"><option value="">—</option>
+            {% for c in categories %}<option value="{{ c.id }}">{{ c.title }}</option>{% endfor %}
+          </select>
+        </label>
+        <button class="btn success" type="submit">{{ t('dash.news.add_source') }}</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>{{ t('dash.news.name') }}</th>
+            <th>{{ t('dash.news.url') }}</th>
+            <th>{{ t('dash.news.kind') }}</th>
+            <th>{{ t('dash.news.enabled') }}</th>
+            <th>{{ t('dash.news.last_status') }}</th>
+            <th>{{ t('dash.news.actions') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in sources %}
+          <tr>
+            <td>{{ s.name }}</td>
+            <td><bdi class="ltr mono" style="font-size:.8em">{{ s.url[:60] }}</bdi></td>
+            <td>{{ s.kind }}</td>
+            <td>{% if s.enabled %}✅{% else %}—{% endif %}</td>
+            <td><bdi class="ltr">{{ s.last_status or '—' }}</bdi></td>
+            <td style="white-space:nowrap">
+              <form method="POST" action="/news/sources/{{ s.id }}" style="display:inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <button class="btn sm" name="action" value="toggle">{{ t('dash.news.toggle') }}</button>
+              </form>
+              <form method="POST" action="/news/sources/{{ s.id }}" style="display:inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <button class="btn sm" name="action" value="test">{{ t('dash.news.test') }}</button>
+              </form>
+              <form method="POST" action="/news/sources/{{ s.id }}" style="display:inline"
+                    data-confirm="{{ t('dash.news.confirm_delete') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <button class="btn sm danger" name="action" value="delete">{{ t('dash.news.delete') }}</button>
+              </form>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6"><div class="empty">{{ t('dash.news.no_sources') }}</div></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}

@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% set active_nav = 'news' %}
+{% block title %}{{ t('dash.news.title') }}{% endblock %}
+
+{% block content %}
+  <div class="page-head">
+    <h1 class="page-title">{{ t('dash.news.title') }}</h1>
+    <div>
+      <a class="btn sm" href="/news/sources">{{ t('dash.news.sources') }}</a>
+      <a class="btn sm" href="/news/settings">{{ t('dash.news.settings') }}</a>
+    </div>
+  </div>
+
+  <div class="metrics">
+    <div class="metric"><div class="metric-label">{{ t('dash.news.backlog') }}</div>
+      <div class="metric-value"><bdi class="ltr">{{ overview.backlog }}</bdi></div></div>
+    <div class="metric"><div class="metric-label">{{ t('dash.news.approved') }}</div>
+      <div class="metric-value blue"><bdi class="ltr">{{ overview.approved }}</bdi></div></div>
+    <div class="metric"><div class="metric-label">{{ t('dash.news.ready') }}</div>
+      <div class="metric-value green"><bdi class="ltr">{{ overview.ready }}</bdi></div></div>
+    <div class="metric"><div class="metric-label">{{ t('dash.news.sent') }}</div>
+      <div class="metric-value"><bdi class="ltr">{{ overview.sent }}</bdi></div></div>
+    <div class="metric"><div class="metric-label">{{ t('dash.news.rejected') }}</div>
+      <div class="metric-value yellow"><bdi class="ltr">{{ overview.rejected }}</bdi></div></div>
+    <div class="metric"><div class="metric-label">{{ t('dash.news.sources') }}</div>
+      <div class="metric-value"><bdi class="ltr">{{ overview.enabled_sources }}/{{ overview.sources }}</bdi></div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <h2>{{ t('dash.news.queue') }}</h2>
+      <form method="GET" action="/news">
+        <select name="status" onchange="this.form.submit()">
+          <option value="">{{ t('dash.news.all') }}</option>
+          {% for s in ['backlog','approved','ready','sent','rejected'] %}
+          <option value="{{ s }}" {% if status_filter == s %}selected{% endif %}>{{ t('dash.news.' ~ s) }}</option>
+          {% endfor %}
+        </select>
+      </form>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>{{ t('dash.news.item') }}</th>
+            <th>{{ t('dash.news.category') }}</th>
+            <th>{{ t('dash.news.status') }}</th>
+            <th class="right">{{ t('dash.news.score') }}</th>
+            <th>{{ t('dash.news.cta') }}</th>
+            <th>{{ t('dash.news.actions') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for it in items %}
+          <tr>
+            <td><a href="/news/{{ it.id }}"><bdi dir="auto">{{ it.title[:90] or '—' }}</bdi></a>
+              {% if it.source %}<div class="muted" style="font-size:.8em"><bdi class="ltr">{{ it.source }}</bdi></div>{% endif %}</td>
+            <td>{{ it.category or '—' }}</td>
+            <td>
+              {% if it.status in ['backlog','approved','ready','sent','rejected'] %}
+              <span class="status-pill {% if it.status in ('ready','sent') %}active{% elif it.status == 'rejected' %}muted{% endif %}">{{ t('dash.news.' ~ it.status) }}</span>
+              {% else %}<span class="status-pill">{{ it.status }}</span>{% endif %}
+            </td>
+            <td class="right"><bdi class="ltr">{{ '%.2f' | format(it.score) }}</bdi></td>
+            <td>{% if it.has_cta %}✅{% else %}—{% endif %}</td>
+            <td style="white-space:nowrap">
+              {% if it.status == 'backlog' %}
+              <form method="POST" action="/news/{{ it.id }}/action" style="display:inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <button class="btn sm success" name="action" value="approve">{{ t('dash.news.approve') }}</button>
+              </form>
+              {% endif %}
+              {% if it.status != 'rejected' %}
+              <form method="POST" action="/news/{{ it.id }}/action" style="display:inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <button class="btn sm danger" name="action" value="reject">{{ t('dash.news.reject') }}</button>
+              </form>
+              {% endif %}
+              <a class="btn sm" href="/news/{{ it.id }}">{{ t('dash.news.open') }}</a>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6"><div class="empty">{{ t('dash.news.none') }}</div></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}

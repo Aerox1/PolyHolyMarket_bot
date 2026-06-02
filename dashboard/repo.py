@@ -8,15 +8,25 @@ are fetched from Polymarket's PUBLIC Data API by wallet address (no key).
 
 from __future__ import annotations
 
+import hashlib
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session, aliased
 
 from core.config import settings
-from db.models import Account, AuditLog, Category, Order, PointsLedger, Referral, Trade, User, UserStats, UserStatus
+from db.models import (
+    Account, AuditLog, Category, NewsItem, NewsSource, Order, PointsLedger,
+    Referral, Trade, User, UserStats, UserStatus,
+)
 from db.repositories import appconfig, gemini_usage
 from db.repositories.rewards import REFERRAL_UNLOCK_BETS
+
+# app_config keys for the news pipeline (admin-editable, non-secret)
+NEWS_CHANNEL_ID = "news_channel_id"
+NEWS_TOP_N = "news_top_n"
+NEWS_AUTOSEND = "news_autosend"
 
 
 def _today_start() -> datetime:
@@ -457,3 +467,190 @@ def top_referrers(db: Session, limit: int = 20) -> list[dict]:
             "points": _points(db, inviter_id),
         })
     return out
+
+
+# ── News pipeline (KEYLESS: never calls Gemini/Telegram; only DB flag-writes) ────
+
+# Statuses still in flight (admin-approved, render not finished) roll up under
+# "approved" in the overview tile.
+_NEWS_INFLIGHT = ("approved", "translating", "rendering")
+
+
+def news_overview(db: Session) -> dict:
+    counts = {"backlog": 0, "approved": 0, "ready": 0, "sent": 0, "rejected": 0}
+    for status, n in db.execute(select(NewsItem.status, func.count()).group_by(NewsItem.status)).all():
+        key = "approved" if status in _NEWS_INFLIGHT else status
+        if key in counts:
+            counts[key] += int(n or 0)
+    counts["sources"] = db.scalar(select(func.count()).select_from(NewsSource)) or 0
+    counts["enabled_sources"] = db.scalar(
+        select(func.count()).select_from(NewsSource).where(NewsSource.enabled.is_(True))) or 0
+    return counts
+
+
+def _news_item_dict(it: NewsItem, *, category: str | None, source: str | None) -> dict:
+    return {
+        "id": it.id,
+        "title": it.title_orig,
+        "status": it.status,
+        "score": _f(it.score),
+        "category_id": it.category_id,
+        "category": category,
+        "source": source,
+        "url": it.url,
+        "lang_orig": it.lang_orig,
+        "has_cta": bool(it.cta_market_id),
+        "cta_market_id": it.cta_market_id,
+        "cta_url": it.cta_url,
+        "image_status": it.image_status,
+        "hero_image_url": it.hero_image_url,
+        "translations": dict(it.translations or {}),
+        "fetched_at": it.fetched_at,
+        "approved_at": it.approved_at,
+        "published_at": it.published_at,
+    }
+
+
+def _name_maps(db: Session, items: list[NewsItem]) -> tuple[dict, dict]:
+    cat_ids = {i.category_id for i in items if i.category_id}
+    src_ids = {i.source_id for i in items if i.source_id}
+    cats = {c.id: c.title for c in db.scalars(select(Category).where(Category.id.in_(cat_ids)))} if cat_ids else {}
+    srcs = {s.id: s.name for s in db.scalars(select(NewsSource).where(NewsSource.id.in_(src_ids)))} if src_ids else {}
+    return cats, srcs
+
+
+def list_news_items(db: Session, *, status: str | None = None, category_id: int | None = None,
+                    limit: int = 50, offset: int = 0) -> list[dict]:
+    stmt = select(NewsItem)
+    if status == "approved":  # match the overview rollup (incl. in-flight render states)
+        stmt = stmt.where(NewsItem.status.in_(_NEWS_INFLIGHT))
+    elif status:
+        stmt = stmt.where(NewsItem.status == status)
+    if category_id:
+        stmt = stmt.where(NewsItem.category_id == category_id)
+    stmt = stmt.order_by(NewsItem.fetched_at.desc(), NewsItem.id.desc()).limit(limit).offset(offset)
+    items = list(db.scalars(stmt))
+    cats, srcs = _name_maps(db, items)
+    return [_news_item_dict(i, category=cats.get(i.category_id), source=srcs.get(i.source_id)) for i in items]
+
+
+def count_news_items(db: Session, *, status: str | None = None, category_id: int | None = None) -> int:
+    stmt = select(func.count()).select_from(NewsItem)
+    if status == "approved":
+        stmt = stmt.where(NewsItem.status.in_(_NEWS_INFLIGHT))
+    elif status:
+        stmt = stmt.where(NewsItem.status == status)
+    if category_id:
+        stmt = stmt.where(NewsItem.category_id == category_id)
+    return db.scalar(stmt) or 0
+
+
+def news_item_detail(db: Session, item_id: int) -> dict | None:
+    it = db.get(NewsItem, item_id)
+    if it is None:
+        return None
+    cats, srcs = _name_maps(db, [it])
+    d = _news_item_dict(it, category=cats.get(it.category_id), source=srcs.get(it.source_id))
+    d["body_orig"] = it.body_orig
+    return d
+
+
+def curate_news_item(db: Session, item_id: int, action: str) -> bool:
+    """Flag-write admin actions on a news item. No external calls — the keyed bot
+    worker acts on the resulting status. Mirrors curate_category."""
+    it = db.get(NewsItem, item_id)
+    if it is None:
+        return False
+    if action == "approve":
+        it.status = "approved"
+        it.approved_at = datetime.now(timezone.utc)
+        it.excluded_from_autopublish = False
+    elif action == "reject":
+        it.status = "rejected"
+    elif action == "unapprove":
+        it.status = "backlog"
+        it.approved_at = None
+    elif action == "rerender":
+        # re-run translate + CTA on next render tick
+        it.status = "approved"
+    elif action == "regen_image":
+        # re-queue for rendering too — render_job only picks up RENDERABLE
+        # statuses, so without this the cleared image would never be rebuilt.
+        it.image_status = "none"
+        it.rendered_image_path = None
+        it.status = "approved"
+    else:
+        return False
+    return True
+
+
+def update_news_translations(db: Session, item_id: int, translations: dict) -> bool:
+    it = db.get(NewsItem, item_id)
+    if it is None:
+        return False
+    it.translations = translations  # full replace (MutableDict)
+    return True
+
+
+def list_news_sources(db: Session) -> list[NewsSource]:
+    return list(db.scalars(select(NewsSource).order_by(NewsSource.id.asc())))
+
+
+def create_news_source(db: Session, *, name: str, url: str, category_id: int | None, kind: str) -> NewsSource | None:
+    url = (url or "").strip()
+    if not url or urlparse(url).scheme not in ("http", "https"):
+        return None  # require an absolute http(s) URL (reject javascript:/data:/file:)
+    url_hash = hashlib.sha256(url.encode("utf-8")).hexdigest()
+    if db.scalar(select(NewsSource.id).where(NewsSource.url_hash == url_hash)) is not None:
+        return None  # duplicate URL
+    if kind not in ("auto", "rss", "html"):
+        kind = "auto"
+    if category_id is not None and db.get(Category, category_id) is None:
+        category_id = None  # drop a stale/bogus FK rather than 500 on flush
+    src = NewsSource(name=(name or url)[:255], url=url[:2048], url_hash=url_hash,
+                     category_id=category_id, kind=kind, enabled=True)
+    db.add(src)
+    db.flush()
+    return src
+
+
+def curate_news_source(db: Session, source_id: int, action: str) -> bool:
+    src = db.get(NewsSource, source_id)
+    if src is None:
+        return False
+    if action == "toggle":
+        src.enabled = not src.enabled
+    elif action == "test":
+        src.last_status = "pending"  # the crawl worker probes it on its next tick
+    elif action == "delete":
+        db.delete(src)
+    else:
+        return False
+    return True
+
+
+def news_integration_status(db: Session) -> dict:
+    channel_id = appconfig.get_sync(db, NEWS_CHANNEL_ID, "") or ""
+    return {
+        "gemini": bool(settings.gemini_api_key),
+        "telegram": bool(settings.telegram_bot_token),
+        "channel": bool(channel_id),
+        "pipeline_enabled": bool(settings.news_pipeline_enabled),
+    }
+
+
+def news_settings(db: Session) -> dict:
+    s = news_integration_status(db)
+    s.update({
+        "channel_id": appconfig.get_sync(db, NEWS_CHANNEL_ID, "") or "",
+        "channel_lang": settings.news_channel_lang,
+        "top_n": int(appconfig.get_float_sync(db, NEWS_TOP_N, 5)),
+        "autosend": appconfig.get_sync(db, NEWS_AUTOSEND, "0") == "1",
+    })
+    return s
+
+
+def set_news_settings(db: Session, *, channel_id: str, top_n: int, autosend: bool) -> None:
+    appconfig.set_sync(db, NEWS_CHANNEL_ID, (channel_id or "").strip())
+    appconfig.set_sync(db, NEWS_TOP_N, str(max(1, min(int(top_n), 20))))
+    appconfig.set_sync(db, NEWS_AUTOSEND, "1" if autosend else "0")

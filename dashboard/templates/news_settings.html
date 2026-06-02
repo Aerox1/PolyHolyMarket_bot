@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% set active_nav = 'news' %}
+{% block title %}{{ t('dash.news.settings') }}{% endblock %}
+
+{% block content %}
+  <div class="page-head">
+    <h1 class="page-title">{{ t('dash.news.settings') }}</h1>
+    <a class="btn sm" href="/news">{{ t('dash.news.back') }}</a>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h2>{{ t('dash.news.integrations') }}</h2></div>
+    <div class="card-body">
+      <p class="muted">{{ t('dash.news.keyless_note') }}</p>
+      <dl class="dl">
+        <dt>{{ t('dash.news.gemini') }}</dt>
+        <dd>{{ t('dash.news.configured') if settings.gemini else t('dash.news.not_configured') }}</dd>
+        <dt>{{ t('dash.news.telegram') }}</dt>
+        <dd>{{ t('dash.news.configured') if settings.telegram else t('dash.news.not_configured') }}</dd>
+        <dt>{{ t('dash.news.channel') }}</dt>
+        <dd>{{ t('dash.news.configured') if settings.channel else t('dash.news.not_configured') }}</dd>
+        <dt>{{ t('dash.news.pipeline') }}</dt>
+        <dd>{{ t('dash.news.pipeline_on') if settings.pipeline_enabled else t('dash.news.pipeline_off') }}</dd>
+      </dl>
+    </div>
+  </div>
+
+  {% if admin and admin.is_superadmin %}
+  <div class="card">
+    <div class="card-header"><h2>{{ t('dash.news.settings') }}</h2></div>
+    <div class="card-body">
+      <form method="POST" action="/news/settings" style="display:flex; flex-direction:column; gap:10px; max-width:420px">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <label>{{ t('dash.news.channel_id') }}<br>
+          <input type="text" name="channel_id" value="{{ settings.channel_id }}" placeholder="-1001234567890"></label>
+        <label>{{ t('dash.news.top_n') }}<br>
+          <input type="number" name="top_n" min="1" max="20" value="{{ settings.top_n }}"></label>
+        <label><input type="checkbox" name="autosend" value="true" {% if settings.autosend %}checked{% endif %}>
+          {{ t('dash.news.autosend') }}</label>
+        <p class="muted">{{ t('dash.news.channel_lang') }}: <bdi class="ltr">{{ settings.channel_lang }}</bdi></p>
+        <button class="btn success" type="submit">{{ t('dash.news.save') }}</button>
+      </form>
+    </div>
+  </div>
+  {% endif %}
+{% endblock %}
