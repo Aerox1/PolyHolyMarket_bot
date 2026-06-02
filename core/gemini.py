@@ -16,13 +16,14 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import json
 import logging
 from pathlib import Path
 
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.config import settings
+from core.config import SUPPORTED_LANGUAGES, settings
 from db.repositories import appconfig, categories as categories_repo, gemini_usage
 
 logger = logging.getLogger(__name__)
@@ -185,3 +186,112 @@ async def generate_welcome_image(session: AsyncSession, *, force: bool = False) 
     if path:
         await appconfig.set_(session, WELCOME_PATH_KEY, path)
     return path
+
+
+# ── Text generation (news translate + summarize) ────────────────────────────────
+# Mirrors the image path: budget-gated against the SAME weekly ledger, blocking
+# REST call off the event loop, never logs the key, charged to gemini_usage.
+
+
+def _call_gemini_text(prompt: str, *, response_json: bool = False, attempts: int = 3) -> str:
+    """Sync Gemini text call. Returns the concatenated text of the first
+    candidate. Raises on failure. Set ``response_json`` to force a JSON body."""
+    url = f"{_API_BASE}/models/{settings.gemini_text_model}:generateContent"
+    headers = {"x-goog-api-key": settings.gemini_api_key, "Connection": "close"}
+    body: dict = {"contents": [{"parts": [{"text": prompt}]}]}
+    if response_json:
+        body["generationConfig"] = {"responseMimeType": "application/json"}
+    last_exc: Exception | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            with httpx.Client(timeout=90, trust_env=settings.gemini_trust_env) as client:
+                r = client.post(url, headers=headers, json=body)
+                r.raise_for_status()
+                data = r.json()
+            chunks: list[str] = []
+            for cand in data.get("candidates", []):
+                for part in cand.get("content", {}).get("parts", []):
+                    if isinstance(part.get("text"), str):
+                        chunks.append(part["text"])
+            text = "".join(chunks).strip()
+            if not text:
+                raise ValueError("no text in Gemini response")
+            return text
+        except httpx.TransportError as exc:  # transient — retry
+            last_exc = exc
+            logger.info("Gemini text transport error (attempt %d/%d): %s",
+                        attempt, attempts, type(exc).__name__)
+            continue
+    raise last_exc if last_exc else RuntimeError("gemini text call failed")
+
+
+async def generate_text(
+    session: AsyncSession, *, prompt: str, kind: str = "news_text",
+    category_id: int | None = None, response_json: bool = False,
+) -> str | None:
+    """Budget-gated text generation. Returns the model text, or None
+    (no key / budget reached / failure). Charges the shared weekly ledger."""
+    if not settings.gemini_api_key:
+        return None
+
+    budget = await appconfig.get_float(session, appconfig.GEMINI_WEEKLY_BUDGET, settings.gemini_weekly_budget_usd)
+    spent = await gemini_usage.weekly_spend(session)
+    cost = settings.gemini_text_cost_usd
+    if spent + cost > budget:
+        logger.info("Gemini weekly budget reached (%.2f/%.2f) — skipping %s", spent, budget, kind)
+        return None
+
+    try:
+        text = await asyncio.to_thread(_call_gemini_text, prompt, response_json=response_json)
+    except Exception as exc:  # noqa: BLE001 — never log the key; httpx errors don't carry it
+        logger.warning("Gemini text failed for %s: %s", kind, type(exc).__name__)
+        await gemini_usage.record(session, category_id=category_id, cost_usd=0,
+                                  model=settings.gemini_text_model, ok=False, kind=kind)
+        return None
+
+    await gemini_usage.record(session, category_id=category_id, cost_usd=cost,
+                              model=settings.gemini_text_model, ok=True, kind=kind)
+    return text
+
+
+def _build_translate_prompt(title: str, body: str, target_langs, tone_prompt: str) -> str:
+    langs = ", ".join(target_langs)
+    tone = f"\nEditorial tone/style to apply: {tone_prompt.strip()}" if tone_prompt.strip() else ""
+    return (
+        "You are a financial-news editor. Translate AND summarize the article below into EACH of these "
+        f"language codes: {langs}.{tone}\n"
+        "For every language produce a concise headline-style title and a 2–3 sentence neutral summary in "
+        "THAT language. Do not add facts that are not in the source. Do not include markdown, links, or "
+        "emojis.\n"
+        "Return ONLY a JSON object mapping each language code to an object with keys \"title\" and "
+        '"summary", e.g. {"en": {"title": "...", "summary": "..."}}.\n\n'
+        f"ARTICLE TITLE:\n{title}\n\nARTICLE BODY:\n{body}"
+    )
+
+
+async def translate_summarize_news(
+    session: AsyncSession, *, title: str, body: str,
+    target_langs: tuple[str, ...] = SUPPORTED_LANGUAGES, tone_prompt: str = "",
+) -> dict[str, dict[str, str]] | None:
+    """ONE budget-charged Gemini call → ``{lang: {"title","summary"}}`` for all
+    target languages. Returns None on no-key / budget / failure (caller passes
+    through the source-language text). Malformed entries are dropped."""
+    prompt = _build_translate_prompt(title, body or title, target_langs, tone_prompt)
+    raw = await generate_text(session, prompt=prompt, kind="news_text", response_json=True)
+    if raw is None:
+        return None
+    try:
+        parsed = json.loads(raw)
+    except (json.JSONDecodeError, ValueError):
+        logger.warning("translate_summarize_news: model returned non-JSON")
+        return None
+    if not isinstance(parsed, dict):
+        return None
+    out: dict[str, dict[str, str]] = {}
+    for lang in target_langs:
+        entry = parsed.get(lang)
+        if isinstance(entry, dict):
+            t_val, s_val = entry.get("title"), entry.get("summary")
+            if isinstance(t_val, str) and isinstance(s_val, str) and t_val.strip() and s_val.strip():
+                out[lang] = {"title": t_val.strip(), "summary": s_val.strip()}
+    return out or None

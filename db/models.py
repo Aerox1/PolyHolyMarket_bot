@@ -33,6 +33,7 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
+from sqlalchemy.ext.mutable import MutableDict
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 # BIGINT in Postgres (prod), INTEGER in SQLite (tests) so autoincrement works in
@@ -291,6 +292,9 @@ class Category(Base):
     title: Mapped[str] = mapped_column(String(128), nullable=False)
     tag_id: Mapped[str | None] = mapped_column(String(64))        # Polymarket tag id
     tag_slug: Mapped[str | None] = mapped_column(String(128))     # Polymarket tag slug
+    # Doubles as the NEWS topic taxonomy: "market" = swipeable market cards (default),
+    # "news" = news topic only, "both" = used in both surfaces.
+    kind: Mapped[str] = mapped_column(String(12), default="market", nullable=False, index=True)
     volume: Mapped[float] = mapped_column(Numeric(20, 2), default=0, nullable=False)  # cached, for sort
     # image (Gemini) — image_path is a cached file under the webapp static dir
     image_path: Mapped[str | None] = mapped_column(String(256))
@@ -307,7 +311,10 @@ class Category(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
-    __table_args__ = (Index("ix_categories_sort", "hidden", "pinned", "display_order"),)
+    __table_args__ = (
+        Index("ix_categories_sort", "hidden", "pinned", "display_order"),
+        CheckConstraint("kind in ('market','news','both')", name="ck_category_kind"),
+    )
 
 
 class GeminiUsage(Base):
@@ -449,3 +456,149 @@ class AuditLog(Base):
     ip: Mapped[str | None] = mapped_column(String(45))
 
     __table_args__ = (Index("ix_audit_ts", "ts"),)
+
+
+# ── News pipeline (crawl → translate/summarize → render → approve → publish) ──
+# Ported from NabzarSocial onto PHM's spine. NO secrets here; the dashboard reads
+# these tables but never holds Gemini/Telegram keys (keyless invariant).
+
+
+class NewsSource(Base):
+    """An admin-curated feed (RSS / single-article HTML). The crawler polls
+    ``enabled`` sources each tick and dedups items by ``url_hash``."""
+
+    __tablename__ = "news_sources"
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    url: Mapped[str] = mapped_column(String(2048), nullable=False)
+    url_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)  # sha256(url)
+    category_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("categories.id", ondelete="SET NULL"))
+    kind: Mapped[str] = mapped_column(String(8), default="auto", nullable=False)  # auto|rss|html
+    lang_hint: Mapped[str | None] = mapped_column(String(8))
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
+    last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_status: Mapped[str | None] = mapped_column(String(64))
+    created_at: Mapped[datetime] = _now()
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        CheckConstraint("kind in ('auto','rss','html','telegram')", name="ck_news_source_kind"),
+        Index("ix_news_sources_enabled_cat", "enabled", "category_id"),
+    )
+
+
+class NewsItem(Base):
+    """A crawled article + its per-language renderings. ``status`` drives the
+    crawl→render→publish handoff; ``translations`` is ``{lang:{title,summary}}``."""
+
+    __tablename__ = "news_items"
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    source_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("news_sources.id", ondelete="SET NULL"))
+    category_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("categories.id", ondelete="SET NULL"))
+    url: Mapped[str] = mapped_column(String(2048), nullable=False)
+    url_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)   # cross-fetch dedup
+    dedup_hash: Mapped[str | None] = mapped_column(String(64), index=True)           # sha256(normalized title)
+    lang_orig: Mapped[str | None] = mapped_column(String(8))
+    title_orig: Mapped[str] = mapped_column(Text, nullable=False)
+    body_orig: Mapped[str | None] = mapped_column(Text)
+    hero_image_url: Mapped[str | None] = mapped_column(String(2048))
+    # {lang: {"title": str, "summary": str}} — produced in ONE Gemini call.
+    # MutableDict so in-place writes (item.translations["en"] = {...}) are tracked
+    # by the ORM and actually persisted — plain JSON would silently drop them.
+    translations: Mapped[dict] = mapped_column(MutableDict.as_mutable(JSON), default=dict, nullable=False)
+    rendered_image_path: Mapped[str | None] = mapped_column(String(512))             # under cards_dir/news/
+    image_status: Mapped[str] = mapped_column(String(12), default="none", nullable=False)  # none|generating|ready|failed
+    status: Mapped[str] = mapped_column(String(16), default="backlog", nullable=False)
+    score: Mapped[float] = mapped_column(Numeric(6, 4), default=0, nullable=False)   # heuristic 0–1
+    excluded_from_autopublish: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # CTA → Polymarket market (resolved once at render, cached on the row)
+    market_id: Mapped[str | None] = mapped_column(String(128))       # article-level hint
+    cta_market_id: Mapped[str | None] = mapped_column(String(128))   # resolved/pinned target
+    cta_url: Mapped[str | None] = mapped_column(String(512))
+    cta_resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    channel_msg_id: Mapped[int | None] = mapped_column(BigInteger)   # for later edit/share
+    fetched_at: Mapped[datetime] = _now()
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        CheckConstraint(
+            "status in ('backlog','approved','translating','rendering','ready','sent','rejected')",
+            name="ck_news_item_status",
+        ),
+        CheckConstraint("image_status in ('none','generating','ready','failed')", name="ck_news_item_image_status"),
+        Index("ix_news_items_status_score", "status", "score"),
+        Index("ix_news_items_cat_status", "category_id", "status"),
+        Index("ix_news_items_published", "published_at"),
+    )
+
+
+class UserNewsPrefs(Base):
+    """Per-user news delivery preferences. ``digest_hour`` is interpreted in the
+    user's ``UserSettings.timezone`` (not duplicated here)."""
+
+    __tablename__ = "user_news_prefs"
+
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    delivery: Mapped[str] = mapped_column(String(8), default="daily", nullable=False)  # off|daily|realtime
+    digest_hour: Mapped[int] = mapped_column(SmallInteger, default=9, nullable=False)
+    quiet_start: Mapped[int | None] = mapped_column(SmallInteger)
+    quiet_end: Mapped[int | None] = mapped_column(SmallInteger)
+    only_relevant: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    max_per_digest: Mapped[int] = mapped_column(SmallInteger, default=5, nullable=False)
+    last_digest_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        CheckConstraint("delivery in ('off','daily','realtime')", name="ck_news_prefs_delivery"),
+        CheckConstraint("digest_hour >= 0 and digest_hour <= 23", name="ck_news_prefs_hour"),
+        Index("ix_news_prefs_delivery", "delivery"),
+    )
+
+
+class UserTopicFollow(Base):
+    """M2M: a user follows a news topic (a ``Category`` with kind news/both)."""
+
+    __tablename__ = "user_topic_follows"
+
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    category_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("categories.id", ondelete="CASCADE"), primary_key=True)
+    created_at: Mapped[datetime] = _now()
+
+    __table_args__ = (Index("ix_topic_follows_category", "category_id"),)
+
+
+class NewsDelivered(Base):
+    """Per-user dedup ledger — guarantees an item is DM'd to a user at most once
+    (across both realtime and digest channels)."""
+
+    __tablename__ = "news_delivered"
+
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    news_item_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("news_items.id", ondelete="CASCADE"), primary_key=True)
+    channel: Mapped[str] = mapped_column(String(8), nullable=False)  # digest|realtime
+    sent_at: Mapped[datetime] = _now()
+
+    __table_args__ = (Index("ix_news_delivered_item", "news_item_id"),)
+
+
+class NewsChannelPost(Base):
+    """Channel-post idempotency: an item is posted at most once per channel per
+    language even if the publish job re-runs."""
+
+    __tablename__ = "news_channel_posts"
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    news_item_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("news_items.id", ondelete="CASCADE"), nullable=False)
+    chat_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    message_id: Mapped[int | None] = mapped_column(BigInteger)
+    lang: Mapped[str] = mapped_column(String(8), nullable=False)
+    posted_at: Mapped[datetime] = _now()
+
+    __table_args__ = (UniqueConstraint("news_item_id", "chat_id", "lang", name="uq_news_channel_post"),)

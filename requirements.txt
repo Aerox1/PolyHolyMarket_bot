@@ -19,6 +19,13 @@ python-multipart>=0.0.9     # form login
 itsdangerous>=2.2           # signed session cookies
 argon2-cffi>=23.1           # admin password hashing
 
+# ── News pipeline (crawl / parse / render) ───────────────
+feedparser>=6.0.11          # RSS/Atom parsing
+trafilatura>=1.12           # HTML article extraction (pulls lxml, courlan, htmldate)
+beautifulsoup4>=4.12        # lightweight HTML scraping
+lxml>=5.2                   # explicit floor — needs a cp313 wheel (avoid source build)
+Pillow>=10.4                # news card logo overlay only
+
 # ── Security / config ────────────────────────────────────
 cryptography>=43            # Fernet encryption at rest
 pydantic>=2

@@ -13,6 +13,10 @@ _TMPDIR = tempfile.mkdtemp(prefix="pmbot-test-")
 
 os.environ.setdefault("ENCRYPTION_KEY", Fernet.generate_key().decode())
 os.environ["DATABASE_URL"] = f"sqlite:///{_TMPDIR}/test.db"
+# Pin the ASYNC url to the SAME temp DB. Without this, a developer's .env
+# DATABASE_URL_ASYNC (e.g. the persistent ./pmbot.db) leaks into the async engine
+# while the sync engine uses the temp DB — divergent schemas across the two.
+os.environ["DATABASE_URL_ASYNC"] = f"sqlite+aiosqlite:///{_TMPDIR}/test.db"
 os.environ.setdefault("TELEGRAM_BOT_TOKEN", "test-token")
 os.environ.setdefault("SESSION_SECRET", "test-session-secret")
 # Isolate the suite from a developer's local .env (which may enable dev-auth or

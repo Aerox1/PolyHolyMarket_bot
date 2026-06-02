@@ -72,17 +72,42 @@ class Settings(BaseSettings):
     # ── Gemini (category card images) ─────────────────────
     gemini_api_key: str = Field("", alias="GEMINI_API_KEY")
     gemini_image_model: str = Field("gemini-2.5-flash-image", alias="GEMINI_IMAGE_MODEL")
+    # Text model — used by the news pipeline (translate + summarize).
+    gemini_text_model: str = Field("gemini-2.5-flash", alias="GEMINI_TEXT_MODEL")
     # Ignore system/env proxies for the Gemini call (most deploys have direct
     # egress to Google; a macOS system proxy / VPN otherwise breaks it). Set true
     # only if you MUST route Gemini through a proxy.
     gemini_trust_env: bool = Field(False, alias="GEMINI_TRUST_ENV")
     # Estimated USD cost per generated image — used for budget accounting.
     gemini_image_cost_usd: float = Field(0.04, alias="GEMINI_IMAGE_COST_USD")
+    # Estimated USD cost per text (translate/summarize) call. Text is ~20× cheaper
+    # than an image; news + images share ONE weekly budget ledger.
+    gemini_text_cost_usd: float = Field(0.002, alias="GEMINI_TEXT_COST_USD")
     # Default weekly budget (USD). The live value is editable in the admin
     # dashboard (stored in app_config); this is just the seed/fallback.
     gemini_weekly_budget_usd: float = Field(10.0, alias="GEMINI_WEEKLY_BUDGET_USD")
     # Directory where generated category card images are cached (served at /cards).
     cards_dir: str = Field("data/cards", alias="CARDS_DIR")
+
+    # ── News pipeline ─────────────────────────────────────
+    # Job cadences (seconds) on the bot JobQueue.
+    news_crawl_interval_seconds: int = Field(900, alias="NEWS_CRAWL_INTERVAL_SECONDS")
+    news_render_interval_seconds: int = Field(120, alias="NEWS_RENDER_INTERVAL_SECONDS")
+    news_publish_interval_seconds: int = Field(60, alias="NEWS_PUBLISH_INTERVAL_SECONDS")
+    # Max articles pulled per source per crawl tick.
+    news_crawl_per_source_limit: int = Field(20, alias="NEWS_CRAWL_PER_SOURCE_LIMIT")
+    # Ignore system/env proxies when crawling news sources (same VPN/proxy caveat
+    # as Gemini/Telegram). Crawl reaches arbitrary admin-supplied hosts.
+    news_crawl_trust_env: bool = Field(False, alias="NEWS_CRAWL_TRUST_ENV")
+    # Per-request crawl timeout (seconds) and max body size (bytes, SSRF/DoS guard).
+    news_crawl_timeout_seconds: float = Field(15.0, alias="NEWS_CRAWL_TIMEOUT_SECONDS")
+    news_crawl_max_bytes: int = Field(5_000_000, alias="NEWS_CRAWL_MAX_BYTES")
+    # Language the public news CHANNEL posts in (per-user DMs use each user's lang).
+    news_channel_lang: str = Field("en", alias="NEWS_CHANNEL_LANG")
+    # Max per-user sends per delivery tick (Telegram rate-limit discipline).
+    news_per_tick_cap: int = Field(25, alias="NEWS_PER_TICK_CAP")
+    # Optional logo composited onto rendered news cards (relative to repo root).
+    news_logo_path: str = Field("", alias="NEWS_LOGO_PATH")
 
     # ── Behaviour ─────────────────────────────────────────
     default_language: str = Field("en", alias="DEFAULT_LANGUAGE")
