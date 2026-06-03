@@ -214,7 +214,14 @@
       "no_topics": "暂无可用的新闻主题。",
       "realtime_header": "📰 为你精选的新闻",
       "digest_header": "📰 你的每日新闻摘要",
-      "quiet": "免打扰时段"
+      "quiet": "免打扰时段",
+      "bet_yes": "🟢 押 YES",
+      "bet_no": "🔴 押 NO",
+      "bet_switch": "🔄 切换选项",
+      "bet_connect_btn": "🔗 连接并下注",
+      "bet_connect_prompt": "📊 要对以下内容押 {outcome}：\n\n“{headline}”\n\n请先连接钱包 — 只需一分钟，随后即可在此处继续下注。",
+      "bet_closed": "⛔️ 该市场已关闭 — 无法再下注。",
+      "bet_unavailable": "⚠️ 暂时无法加载该市场，请稍后再试。"
     }
   },
   "dash": {

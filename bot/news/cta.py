@@ -45,3 +45,14 @@ def news_deeplink(bot_username: str, *, item_id: int) -> str:
     routes to its cached ``cta_market_id`` (tap-to-trade) when present, else opens
     the bot. Mirrors start.py's start-arg convention (``r-<code>``)."""
     return f"https://t.me/{bot_username}?start=n-{item_id}"
+
+
+def bet_deeplink(bot_username: str, *, item_id: int, outcome: str) -> str:
+    """Deep-link that pre-selects a bet OUTCOME on the item's market (``nb-<id>-y``
+    / ``nb-<id>-n``). Only the item id + a single y/n char are encoded (≈17 chars,
+    well under the 64-char cap); the token_id and price are resolved server-side
+    at click time from the trusted ``cta_market_id`` — never carried in the link
+    — so an edited payload can at most pick a different item or flip the outcome,
+    never inject an arbitrary token or amount."""
+    o = "y" if str(outcome).upper().startswith("Y") else "n"
+    return f"https://t.me/{bot_username}?start=nb-{item_id}-{o}"

@@ -175,6 +175,31 @@ def get_market(condition_id: str) -> dict | None:
     return _normalize_market(rows[0]) if rows else None
 
 
+def get_market_state(condition_id: str) -> tuple[str, dict | None]:
+    """Like ``get_market`` but DISTINGUISHES a genuinely-closed market from a
+    transient upstream failure — ``get_market`` collapses both to ``None``, which
+    would let a Gamma timeout / VPN-egress blip be read as "market closed" and (on
+    the resume path) permanently expire a bet intent.
+
+    Returns ``(state, market)``:
+      * ``("open", {...})``   — bettable binary market (normalized dict)
+      * ``("closed", None)``  — exists but resolved/inactive/not binary → don't bet
+      * ``("error", None)``   — non-200, network error, or empty body → RETRYABLE
+    """
+    try:
+        with _client() as c:
+            r = c.get("/markets", params={"condition_ids": condition_id, "limit": 1})
+            if r.status_code != 200:
+                return ("error", None)
+            rows = _as_list(r.json())
+    except Exception:  # noqa: BLE001 — transient (timeout/DNS/egress) → retryable
+        return ("error", None)
+    if not rows:  # empty response for a known id is more likely a hiccup than a tombstone
+        return ("error", None)
+    nm = _normalize_market(rows[0])
+    return ("open", nm) if nm else ("closed", None)
+
+
 def market_resolution(condition_id: str) -> dict:
     """Resolution status of a market.
 

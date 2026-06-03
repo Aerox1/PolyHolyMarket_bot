@@ -21,6 +21,7 @@ from core.config import settings
 from core.i18n import LANG_FLAGS, LANG_NAMES, SUPPORTED, t
 from db.engine import async_session_scope
 from db.repositories import accounts as accounts_repo
+from db.repositories import pending_intents as intents_repo
 from db.repositories import rewards as rewards_repo
 from db.repositories import users as users_repo
 
@@ -171,15 +172,62 @@ async def _open_news_item(update: Update, context: ContextTypes.DEFAULT_TYPE, it
     await show_dashboard(update, context)
 
 
+async def _open_news_bet(update: Update, context: ContextTypes.DEFAULT_TYPE,
+                         item_id: int, outcome: str) -> None:
+    """News-channel Bet CTA target (``nb-<id>-<y|n>``). Connected user → jump
+    straight to the amount picker for the chosen outcome. New user → persist the
+    intended bet, arm resume, and route through the existing connect flow; the bet
+    resumes on the amount picker after onboarding (never auto-placed)."""
+    from db.models import NewsItem
+    user_id = common.db_user_id(context)
+    async with async_session_scope() as s:
+        item = await s.get(NewsItem, item_id)
+        market_id = item.cta_market_id if item else None
+        question = item.title_orig if item else None
+        acc = await accounts_repo.resolve_account(s, user_id) if user_id else None
+    if not market_id:
+        # no bettable market resolved for this item → open it normally
+        await _open_news_item(update, context, item_id)
+        return
+    if acc is not None:
+        await discover.show_market_for_bet(
+            update, context, market_id, preselect_outcome=outcome, news_item_id=item_id)
+        return
+
+    # Not connected: stash the intent so it survives onboarding, then send to connect.
+    pid = None
+    if user_id is not None:
+        try:
+            async with async_session_scope() as s:
+                intent = await intents_repo.upsert_intent(
+                    s, user_id=user_id, news_item_id=item_id, market_id=market_id,
+                    outcome=outcome, question=question, ttl_hours=settings.news_intent_ttl_hours)
+                pid = intent.id
+        except Exception as exc:  # noqa: BLE001 — never block onboarding on the intent write
+            logger.warning("pending intent upsert failed: %s", type(exc).__name__)
+    # Arm resume ONLY for this bet-prompt path (so a later unrelated /connect won't
+    # yank the user into a stale bet picker).
+    context.user_data["news_bet_armed"] = pid or True
+    kb = InlineKeyboardMarkup([[InlineKeyboardButton(
+        common.tr(context, "bot.news.bet_connect_btn"), callback_data="menu:connect")]])
+    await common.reply(update, context, "bot.news.bet_connect_prompt", reply_markup=kb,
+                       outcome=outcome, headline=common.md_safe(question or "", 120))
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """/start [r-<code> | n-<item_id>] — attribute referral or open a news item's
-    market, otherwise show the dashboard."""
+    """/start [r-<code> | n-<item_id> | nb-<item_id>-<y|n>] — attribute a referral,
+    open a news item's market, pre-select a bet outcome, else show the dashboard."""
     try:
         ref_code = None
         news_item_id = None
+        news_bet = None  # (item_id, "YES"|"NO")
         for a in (context.args or []):
             al = a.lower()
-            if al.startswith("r-"):
+            if al.startswith("nb-"):
+                parts = a[3:].split("-")
+                if len(parts) == 2 and parts[0].isdigit() and parts[1].lower() in ("y", "n"):
+                    news_bet = (int(parts[0]), "YES" if parts[1].lower() == "y" else "NO")
+            elif al.startswith("r-"):
                 ref_code = a[2:]
             elif al.startswith("n-") and a[2:].isdigit():
                 news_item_id = int(a[2:])
@@ -189,6 +237,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 user = await users_repo.get_user(s, tg.id)
                 if user:
                     await rewards_repo.attribute_referral(s, user, ref_code)
+        if news_bet is not None:
+            await _open_news_bet(update, context, news_bet[0], news_bet[1])
+            return
         if news_item_id is not None:
             await _open_news_item(update, context, news_item_id)
             return

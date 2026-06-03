@@ -28,6 +28,7 @@ from db.repositories import news_delivery
 from db.repositories import news_items as items_repo
 from db.repositories import news_prefs
 from db.repositories import news_sources as sources_repo
+from db.repositories import pending_intents as intents_repo
 
 logger = logging.getLogger(__name__)
 
@@ -258,17 +259,31 @@ async def news_digest_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     await _deliver(context, mode="daily", channel="digest", header_key="bot.news.digest_header")
 
 
+async def news_intents_cleanup_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Reap past-TTL pending/resumed bet intents (deferred news-channel bets that
+    were never completed) so the table can't grow unbounded."""
+    async with async_session_scope() as session:
+        n = await intents_repo.expire_stale(session)
+    if n:
+        logger.info("news: expired %d stale pending bet intents", n)
+
+
 def register_news_jobs(application: Application) -> None:
-    if not settings.news_pipeline_enabled:
-        logger.info("News pipeline disabled (NEWS_PIPELINE_ENABLED=0) — jobs not registered.")
-        return
     jq = application.job_queue
     if jq is None:
-        logger.warning("JobQueue unavailable — news pipeline disabled.")
+        logger.warning("JobQueue unavailable — news jobs not registered.")
         return
     # max_instances=1 + coalesce: never overlap a slow run with the next tick (the
     # publish job's at-most-once guarantee assumes no concurrent publishers).
     serial = {"max_instances": 1, "coalesce": True}
+    # The bet-intent reaper runs REGARDLESS of the crawl/render/publish pipeline: a
+    # user can open an `nb-` bet deep-link (creating a pending intent) even when the
+    # pipeline is off, so the table must always stay bounded.
+    jq.run_repeating(news_intents_cleanup_job, interval=3600, first=300,
+                     name="news_intents_cleanup", job_kwargs=serial)
+    if not settings.news_pipeline_enabled:
+        logger.info("News pipeline disabled (NEWS_PIPELINE_ENABLED=0) — only the bet-intent cleanup job is registered.")
+        return
     jq.run_repeating(crawl_job, interval=settings.news_crawl_interval_seconds, first=45,
                      name="news_crawl", job_kwargs=serial)
     jq.run_repeating(render_job, interval=settings.news_render_interval_seconds, first=90,

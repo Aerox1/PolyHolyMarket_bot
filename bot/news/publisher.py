@@ -118,6 +118,17 @@ def build_digest(items, *, lang: str, header: str) -> str:
 
 
 def build_keyboard(item, *, bot_username: str | None, lang: str) -> InlineKeyboardMarkup | None:
+    # When the item has a resolved market AND we know our bot username, surface a
+    # direct two-button bet CTA (Bet YES / Bet NO). The outcome→token mapping is
+    # resolved fresh server-side when the link is opened (never from the payload),
+    # so the labels stay plain (no frozen odds that would go stale on the post).
+    if item.cta_market_id and bot_username:
+        return InlineKeyboardMarkup([[
+            InlineKeyboardButton(t("bot.news.bet_yes", lang),
+                                 url=cta_mod.bet_deeplink(bot_username, item_id=item.id, outcome="YES")),
+            InlineKeyboardButton(t("bot.news.bet_no", lang),
+                                 url=cta_mod.bet_deeplink(bot_username, item_id=item.id, outcome="NO")),
+        ]])
     url = item.cta_url or (cta_mod.news_deeplink(bot_username, item_id=item.id) if bot_username else None)
     if not url:
         return None  # no link target yet → post the article without a button

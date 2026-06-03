@@ -19,6 +19,7 @@ from telegram import InlineKeyboardButton, Update
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes
 
 from bot.handlers import common, confirm, inquiry
+from core.config import settings
 from polymarket import markets
 
 logger = logging.getLogger(__name__)
@@ -26,6 +27,7 @@ logger = logging.getLogger(__name__)
 _MKTS = "disc_markets"   # stashed normalized markets for the current list
 _CATS = "disc_cats"      # stashed categories
 _GEN = "disc_gen"        # monotonic list generation
+_NEWS_BET = "disc_news_bet"  # {gen, item_id, pending_intent_id} for the news-bet funnel
 _AMOUNTS = (5, 10, 25, 50)  # market-buy presets (USD)
 
 
@@ -249,6 +251,63 @@ async def market(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await show_market_by_id(update, context, context.args[0])
 
 
+# ── news-channel "Bet on this" funnel ─────────────────────────────────────────
+
+def _bet_amount_screen(context: ContextTypes.DEFAULT_TYPE, m: dict, gen, idx, side: str):
+    """Amount picker for a PRE-SELECTED outcome (skips the YES/NO panel). The
+    amount + switch buttons reuse the existing buy:/buyamt: callbacks, so the
+    generation guard and on_buy_amount handle them unchanged."""
+    outcome = "YES" if side == "yes" else "NO"
+    other = "no" if side == "yes" else "yes"
+    amounts = [InlineKeyboardButton(f"${a}", callback_data=f"buyamt:{gen}:{idx}:{side}:{a}") for a in _AMOUNTS]
+    switch = InlineKeyboardButton(common.tr(context, "bot.news.bet_switch"),
+                                  callback_data=f"buy:{gen}:{idx}:{other}")
+    body = (f"💵 <b>{common.esc(outcome)} — {common.esc(m.get('question') or '?')}</b>\n\n"
+            f"🟢 YES {_pct(m.get('yes_price'))}    🔴 NO {_pct(m.get('no_price'))}\n\n"
+            f"{common.esc(common.tr(context, 'bot.market.choose_amount'))}")
+    return body, common.with_nav(context, [amounts, [switch]])
+
+
+async def _bet_text(update: Update, context: ContextTypes.DEFAULT_TYPE, key: str, chat_id: int | None) -> None:
+    if chat_id is not None:
+        await context.bot.send_message(chat_id=chat_id, text=common.tr(context, key),
+                                       parse_mode="Markdown", reply_markup=common.with_nav(context))
+        return
+    await common.reply(update, context, key, reply_markup=common.with_nav(context))
+
+
+async def show_market_for_bet(
+    update: Update, context: ContextTypes.DEFAULT_TYPE, market_id: str, *,
+    preselect_outcome: str, news_item_id: int | None = None,
+    pending_intent_id: int | None = None, chat_id: int | None = None,
+) -> bool:
+    """Land a news-channel bet CTA straight on the amount picker for a chosen
+    outcome. Resolves the market FRESH (so the token + price are current, never a
+    stale snapshot) and distinguishes a closed market from a transient upstream
+    blip. ``chat_id`` sends via the bot (used by the connect resume hook, where the
+    inbound message was deleted and there's no callback to edit). Returns False
+    (after a message) if the market is closed/unavailable."""
+    state, m = await asyncio.to_thread(markets.get_market_state, market_id)
+    if state == "closed":
+        await _bet_text(update, context, "bot.news.bet_closed", chat_id)
+        return False
+    if state != "open" or not m:
+        await _bet_text(update, context, "bot.news.bet_unavailable", chat_id)
+        return False
+    gen = _new_gen(context)
+    common.stash(context, _MKTS, [m])
+    context.user_data[_NEWS_BET] = {
+        "gen": gen, "item_id": news_item_id, "pending_intent_id": pending_intent_id}
+    side = "yes" if str(preselect_outcome).upper().startswith("Y") else "no"
+    text, kb = _bet_amount_screen(context, m, gen, 0, side)
+    if chat_id is not None:
+        await context.bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML",
+                                       reply_markup=kb, disable_web_page_preview=True)
+    else:
+        await common.screen(update, context, text=text, reply_markup=kb)
+    return True
+
+
 async def on_buy(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
@@ -275,13 +334,30 @@ async def on_buy_amount(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         return
     token = m.get("yes_token") if side == "yes" else m.get("no_token")
     outcome = "YES" if side == "yes" else "NO"
+    entry_price = m.get("yes_price") if side == "yes" else m.get("no_price")
     try:
         amount = float(amt)
     except ValueError:
         return
     title = m.get("question") or token
-    intent = confirm.make_intent("market", side="buy", token_id=str(token), amount=amount,
-                                 title=title, outcome=outcome)
+    fields = dict(side="buy", token_id=str(token), amount=amount, title=title, outcome=outcome,
+                  market_id=str(m.get("id") or ""), entry_price=entry_price)
+    # If this buy belongs to the active news-bet funnel (same generation), tag it
+    # so it's recorded as a settleable Bet and placed with a slippage cap (the tap
+    # came from a public channel, where the price may have moved since posting).
+    nb = context.user_data.get(_NEWS_BET)
+    if nb and str(nb.get("gen")) == str(gen):
+        # A news-channel bet MUST be slippage-capped — the tap came from a public
+        # message where the price may have moved. If we couldn't price the outcome,
+        # REFUSE rather than silently fall back to an uncapped market order.
+        if not entry_price:
+            await common.reply(update, context, "bot.news.bet_unavailable",
+                               reply_markup=common.with_nav(context))
+            return
+        fields.update(source="news", news_item_id=nb.get("item_id"),
+                      pending_intent_id=nb.get("pending_intent_id"), neg_risk=bool(m.get("neg_risk")),
+                      max_price=min(float(entry_price) * (1 + settings.news_bet_slippage), 0.99))
+    intent = confirm.make_intent("market", **fields)
     await confirm.request(update, context, intent, "bot.confirm.buy_market",
                           outcome=outcome, title=common.md_safe(title, 60), amount=f"{amount:g}")
 

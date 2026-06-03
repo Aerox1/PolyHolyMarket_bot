@@ -181,14 +181,17 @@ def _recording_app(calls):
 
 
 def test_register_news_jobs_disabled(monkeypatch):
+    # the bet-intent reaper registers regardless (intents can be created via an
+    # nb- deep-link even with the pipeline off); the crawl/render/publish jobs do not.
     monkeypatch.setattr(news_jobs.settings, "news_pipeline_enabled", False)
     calls: list = []
     news_jobs.register_news_jobs(_recording_app(calls))
-    assert calls == []
+    assert calls == ["news_intents_cleanup"]
 
 
 def test_register_news_jobs_enabled(monkeypatch):
     monkeypatch.setattr(news_jobs.settings, "news_pipeline_enabled", True)
     calls: list = []
     news_jobs.register_news_jobs(_recording_app(calls))
-    assert set(calls) == {"news_crawl", "news_render", "news_publish", "news_realtime", "news_digest"}
+    assert set(calls) == {"news_crawl", "news_render", "news_publish", "news_realtime",
+                          "news_digest", "news_intents_cleanup"}

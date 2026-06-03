@@ -266,6 +266,24 @@ class Polymarket:
         signed = clob.create_market_order(order_args)
         return clob.post_order(signed, OrderType.FOK)
 
+    def place_capped_buy(
+        self, token_id: str, amount: float, max_price: float, neg_risk: bool | None = None
+    ) -> dict:
+        """A slippage-guarded BUY: a FOK *limit* at ``max_price`` sized so the full
+        USD ``amount`` is spent at that ceiling. Fills only at ≤ ``max_price`` (or
+        not at all), unlike ``place_market_order`` whose FOK caps fill *size*, not
+        *price* — a bare market buy can still fill at a materially worse average
+        within available liquidity. Used for news-channel "Bet" CTAs, where the
+        tap comes from a public message and the price may have moved since posting.
+        """
+        clob = self._require_signing()
+        price = min(max(float(max_price), 0.01), 0.99)  # valid CLOB tick range
+        size = round(float(amount) / price, 2)          # shares; cost ≤ amount at the ceiling
+        order_args = OrderArgs(token_id=token_id, price=price, size=size, side=BUY)
+        options = PartialCreateOrderOptions(neg_risk=neg_risk) if neg_risk is not None else None
+        signed = clob.create_order(order_args, options)
+        return clob.post_order(signed, OrderType.FOK)
+
     def cancel_order(self, order_id: str) -> dict:
         return self._require_signing().cancel(order_id)
 

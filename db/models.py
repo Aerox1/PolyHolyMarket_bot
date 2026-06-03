@@ -427,6 +427,38 @@ class Referral(Base):
     unlocked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class PendingIntent(Base):
+    """A bet a user intended to place but couldn't yet — almost always because
+    they tapped a news-channel "Bet YES/NO" CTA before connecting a wallet. The
+    intent survives the multi-step connect conversation (which clears user_data)
+    and a restart, so ``resume_after_connect`` can drop the user back on the
+    amount picker for the SAME outcome. NEVER auto-placed: resume only renders the
+    picker; the user still taps an amount + confirms. No secrets here."""
+
+    __tablename__ = "pending_intents"
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    news_item_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("news_items.id", ondelete="SET NULL"))
+    market_id: Mapped[str] = mapped_column(String(128), nullable=False)   # conditionId
+    outcome: Mapped[str] = mapped_column(String(8), nullable=False)       # YES|NO
+    question: Mapped[str | None] = mapped_column(Text)
+    source: Mapped[str] = mapped_column(String(16), default="news", nullable=False)
+    status: Mapped[str] = mapped_column(String(16), default="pending", nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)  # sha256(user:item:outcome)
+    created_at: Mapped[datetime] = _now()
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        CheckConstraint("outcome in ('YES','NO')", name="ck_pending_intent_outcome"),
+        CheckConstraint(
+            "status in ('pending','resumed','fulfilled','expired','cancelled')",
+            name="ck_pending_intent_status",
+        ),
+        Index("ix_pending_intents_user_status", "user_id", "status"),
+    )
+
+
 class AppConfig(Base):
     """Runtime-editable key/value config (e.g. the live Gemini weekly budget),
     so admins can change settings without a redeploy."""

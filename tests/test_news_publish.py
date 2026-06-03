@@ -61,11 +61,15 @@ def test_build_caption_truncates_safely_under_cap():
     assert not cap.rstrip().endswith("<")          # never a dangling tag start
 
 
-def test_build_keyboard_trade_vs_open_and_none():
-    trade = publisher.build_keyboard(_item(cta_market_id="0xabc", cta_url="https://t.me/B?start=n-7"),
-                                     bot_username="B", lang="en")
-    assert trade.inline_keyboard[0][0].text == "📈 Trade this market"
-    assert trade.inline_keyboard[0][0].url == "https://t.me/B?start=n-7"
+def test_build_keyboard_bet_vs_open_and_none():
+    # resolved market + known bot → a direct two-button bet CTA (Bet YES / Bet NO),
+    # deep-linking nb-<id>-y / nb-<id>-n (outcome resolved server-side at click).
+    bet = publisher.build_keyboard(_item(cta_market_id="0xabc", cta_url="https://t.me/B?start=n-7"),
+                                   bot_username="B", lang="en")
+    row = bet.inline_keyboard[0]
+    assert [b.url for b in row] == ["https://t.me/B?start=nb-7-y", "https://t.me/B?start=nb-7-n"]
+    assert "YES" in row[0].text and "NO" in row[1].text
+    # no resolved market → the single "Open in bot" link (unchanged)
     openb = publisher.build_keyboard(_item(cta_market_id=None, cta_url="https://t.me/B?start=n-7"),
                                      bot_username="B", lang="en")
     assert openb.inline_keyboard[0][0].text == "📰 Open in bot"

@@ -72,10 +72,13 @@ async def request(update: Update, context: ContextTypes.DEFAULT_TYPE, intent: di
     intent["ts"] = time.time()
     kind = intent.get("kind")
     # Always confirm anything that closes/spends a position, even if the user turned
-    # per-trade confirmation off: cancel-all, full closes, and market sells.
+    # per-trade confirmation off: cancel-all, full closes, and market sells. News
+    # bets ALSO always confirm — the tap originates from a public channel, so we
+    # never place one without an explicit ✅ (keeps "never auto-place" literally true).
     always_confirm = (
         kind in ("cancel_all", "close")
         or (kind == "market" and intent.get("side") == "sell")
+        or intent.get("source") == "news"
     )
     if not always_confirm and not await _wants_confirmation(user_id):
         await _execute(update, context, intent)
@@ -205,7 +208,13 @@ async def _execute(update: Update, context: ContextTypes.DEFAULT_TYPE, intent: d
         if kind == "limit":
             result = await asyncio.to_thread(pm.place_limit_order, token, intent["price"], intent["size"], side)
         elif kind == "market":
-            result = await asyncio.to_thread(pm.place_market_order, token, intent["amount"], side)
+            if side == "buy" and intent.get("max_price"):
+                # slippage-guarded buy (news-channel CTA) — FOK limit at the cap
+                result = await asyncio.to_thread(
+                    pm.place_capped_buy, token, intent["amount"], intent["max_price"],
+                    intent.get("neg_risk"))
+            else:
+                result = await asyncio.to_thread(pm.place_market_order, token, intent["amount"], side)
         elif kind == "close":  # market SELL of the full share size
             result = await asyncio.to_thread(pm.place_market_order, token, intent["size"], "sell")
         elif kind == "cancel":
@@ -247,6 +256,8 @@ async def _execute(update: Update, context: ContextTypes.DEFAULT_TYPE, intent: d
 
     if ok and user_id is not None:
         await _record_activity(user_id, intent)
+        if intent.get("source") == "news":
+            await _record_news_bet(user_id, account_id, intent, order_id)
 
     if not ok:
         await _fail(_result_detail(result))
@@ -301,6 +312,31 @@ async def _record_activity(user_id: int, intent: dict) -> None:
             await rewards_repo.reward_for_bet(session, user_id, amount)
     except Exception as exc:  # noqa: BLE001 — gamification must never block a trade
         logger.warning("record_activity failed: %s", type(exc).__name__)
+
+
+async def _record_news_bet(user_id: int, account_id: int | None, intent: dict,
+                           clob_order_id: str | None) -> None:
+    """Record a settleable Bet for a news-channel CTA order + close its pending
+    intent. News-scoped: other Telegram trades aren't yet recorded as settleable
+    bets (see docs/BET_ON_NEWS_PLAN.md §6). Best-effort — never blocks the trade."""
+    try:
+        from db.repositories import bets as bets_repo
+        from db.repositories import pending_intents as intents_repo
+        ep = intent.get("entry_price")
+        async with async_session_scope() as session:
+            await bets_repo.create_bet(
+                session, user_id=user_id, account_id=account_id,
+                market_id=intent.get("market_id") or "", token_id=intent.get("token_id") or "",
+                question=intent.get("title"), outcome=intent.get("outcome") or "",
+                amount_usd=float(intent.get("amount") or 0),
+                entry_price=float(ep) if ep is not None else None,
+                source="news", clob_order_id=clob_order_id,
+            )
+            pid = intent.get("pending_intent_id")
+            if pid:
+                await intents_repo.mark(session, pid, "fulfilled")
+    except Exception as exc:  # noqa: BLE001 — bet recording must never block the trade response
+        logger.warning("news bet record failed: %s", type(exc).__name__)
 
 
 async def _log_order(account_id: int, intent: dict, *, status: str,

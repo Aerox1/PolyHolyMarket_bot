@@ -112,6 +112,13 @@ class Settings(BaseSettings):
     news_realtime_max: int = Field(3, alias="NEWS_REALTIME_MAX")
     # Optional logo composited onto rendered news cards (relative to repo root).
     news_logo_path: str = Field("", alias="NEWS_LOGO_PATH")
+    # "Bet on this" channel CTA: max upward price tolerance for a news-originated
+    # market BUY (placed as a FOK limit at entry*(1+slippage), capped at 0.99) so a
+    # tap from a public channel can't fill at an arbitrarily worse price.
+    news_bet_slippage: float = Field(0.05, alias="NEWS_BET_SLIPPAGE")
+    # How long a pending bet intent (stored when a non-connected user taps a bet
+    # CTA) stays resumable after onboarding before the cleanup tick expires it.
+    news_intent_ttl_hours: int = Field(24, alias="NEWS_INTENT_TTL_HOURS")
 
     # ── Behaviour ─────────────────────────────────────────
     default_language: str = Field("en", alias="DEFAULT_LANGUAGE")

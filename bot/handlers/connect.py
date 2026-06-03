@@ -301,6 +301,10 @@ async def enter_key(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             ),
             parse_mode="Markdown",
         )
+        # If the user came here from a news-channel "Bet" CTA, resume that bet on
+        # the amount picker. Best-effort and AFTER the key is gone — never raises
+        # into the success path.
+        await _resume_news_bet(update, context, chat_id, user_id)
         return ConversationHandler.END
     finally:
         # Zeroize the key in every exit path (success, retry, raise).
@@ -308,6 +312,42 @@ async def enter_key(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         if isinstance(state, dict):
             state["key"] = None
             state.pop("key", None)
+
+
+# ── news-bet resume (after a successful connect) ──────────────────────────────
+
+async def _resume_news_bet(update: Update, context: ContextTypes.DEFAULT_TYPE,
+                           chat_id: int, user_id: int | None) -> None:
+    """Resume a bet the user intended from a news-channel CTA before connecting.
+    Gated on the ``news_bet_armed`` flag (set only on that path) so an unrelated
+    /connect never resurfaces a stale bet. Renders the amount picker — NEVER
+    auto-places. Best-effort: a failure here must not disturb the connect success.
+    """
+    if not context.user_data.pop("news_bet_armed", None) or user_id is None:
+        return
+    try:
+        from bot.handlers import discover
+        from db.repositories import pending_intents as intents_repo
+        intent_id = market_id = outcome = item_id = None
+        async with async_session_scope() as session:
+            row = await intents_repo.latest_pending(session, user_id)
+            if row is not None:
+                intent_id, market_id, outcome, item_id = (
+                    row.id, row.market_id, row.outcome, row.news_item_id)
+        if not market_id:
+            return
+        ok = await discover.show_market_for_bet(
+            update, context, market_id, preselect_outcome=outcome,
+            news_item_id=item_id, pending_intent_id=intent_id, chat_id=chat_id)
+        # Mark 'resumed' ONLY once the picker actually rendered. If the market was
+        # closed/unavailable, leave the intent 'pending' so it isn't orphaned in a
+        # dead 'resumed' state — the cleanup job reaps it at TTL, and a fresh tap
+        # (now connected) takes the direct path with a live market check.
+        if ok and intent_id is not None:
+            async with async_session_scope() as session:
+                await intents_repo.mark(session, intent_id, "resumed")
+    except Exception as exc:  # noqa: BLE001 — resume is a bonus; connect already succeeded
+        logger.warning("news bet resume failed: %s", type(exc).__name__)
 
 
 # ── fallbacks / timeout ───────────────────────────────────────────────────────
