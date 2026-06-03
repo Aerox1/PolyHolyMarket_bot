@@ -97,6 +97,9 @@ async def start_connect(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         await update.callback_query.answer()
 
     _clear_connect(context)
+    # Disarm any pending custom-amount capture so the key the user is about to paste
+    # can never be read by the discover typed-amount handler.
+    context.user_data.pop("awaiting_bet", None)
     context.user_data["connect"] = {}
 
     msg = update.effective_message

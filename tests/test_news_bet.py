@@ -3,6 +3,7 @@ the slippage-capped buy, deferred-intent persistence/resume, and bet recording.
 
 Network (Gamma/CLOB) and Telegram are mocked — no egress, no real orders."""
 
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -24,12 +25,19 @@ from polymarket.client import Polymarket
 class _Query:
     def __init__(self, data):
         self.data = data
+        self.message = None  # not a telegram.Message → common.screen falls through to reply
 
     async def answer(self):
         pass
 
     async def edit_message_text(self, *a, **k):
         pass
+
+
+def _msg_update(text: str):
+    return SimpleNamespace(callback_query=None, effective_message=_RecMsg(),
+                           effective_user=SimpleNamespace(id=111),
+                           message=SimpleNamespace(text=text))
 
 
 class _RecMsg:
@@ -106,6 +114,7 @@ def _resp(status, payload):
 
 
 def test_get_market_state_open_closed_error(monkeypatch):
+    monkeypatch.setattr(markets.settings, "markets_cache_ttl_seconds", 0)  # exercise the branch, not the cache
     # open: a live binary market
     monkeypatch.setattr(markets, "_client", lambda: _fake_client(_resp(200, [_gamma_market()])))
     state, m = markets.get_market_state("0xCOND")
@@ -337,6 +346,7 @@ async def test_on_buy_amount_tags_news_bet_with_cap(monkeypatch):
         captured["intent"] = intent
 
     monkeypatch.setattr(discover.confirm, "request", fake_request)
+    monkeypatch.setattr(discover.markets, "get_market_state", lambda mid: ("open", m))  # fresh re-resolve
     ctx = _ctx()
     ctx.user_data[discover._GEN] = 1
     common.stash(ctx, discover._MKTS, [m])
@@ -359,6 +369,7 @@ async def test_on_buy_amount_news_refuses_when_unpriced(monkeypatch):
         called["hit"] = True
 
     monkeypatch.setattr(discover.confirm, "request", fake_request)
+    monkeypatch.setattr(discover.markets, "get_market_state", lambda mid: ("open", m))  # fresh, but unpriced
     ctx = _ctx()
     ctx.user_data[discover._GEN] = 1
     common.stash(ctx, discover._MKTS, [m])
@@ -492,3 +503,94 @@ async def test_record_news_bet_creates_settleable_bet_and_fulfills_intent():
         assert bet.outcome == "YES" and float(bet.entry_price) == 0.70 and bet.clob_order_id == "ORDER-1"
         assert float(bet.shares) == pytest.approx(25.0 / 0.70)  # settleable (shares derived)
         assert (await s.get(PendingIntent, pid)).status == "fulfilled"
+
+
+# ── custom typed amount ───────────────────────────────────────────────────────
+
+async def test_custom_amount_arms_then_places(monkeypatch):
+    m = markets._normalize_market(_gamma_market())
+    captured = {}
+
+    async def fake_request(update, context, intent, key, **vars):
+        captured["intent"] = intent
+
+    monkeypatch.setattr(discover.confirm, "request", fake_request)
+    monkeypatch.setattr(discover.markets, "get_market_state", lambda mid: ("open", m))  # fresh re-resolve
+    ctx = _ctx()
+    ctx.user_data[discover._GEN] = 1
+    common.stash(ctx, discover._MKTS, [m])
+    ctx.user_data[discover._NEWS_BET] = {"gen": 1, "item_id": 5, "side": "yes",
+                                         "pending_intent_id": None, "account_id": None}
+    await discover.on_buy_custom(_update(query=_Query("buycustom:1:0:yes")), ctx)
+    assert ctx.user_data[discover._AWAIT_BET]["side"] == "yes"   # capture armed
+    await discover.on_custom_amount(_msg_update("42"), ctx)
+    assert captured["intent"]["amount"] == 42.0 and captured["intent"]["source"] == "news"
+    assert discover._AWAIT_BET not in ctx.user_data            # one-shot, consumed
+
+
+async def test_custom_amount_ignored_when_not_armed():
+    ctx = _ctx()  # no _AWAIT_BET
+    upd = _msg_update("hello world")
+    await discover.on_custom_amount(upd, ctx)
+    assert upd.effective_message.sent == []  # never touched (won't swallow a pasted key)
+
+
+async def test_custom_amount_rejects_non_number(monkeypatch):
+    m = markets._normalize_market(_gamma_market())
+    called = {}
+    monkeypatch.setattr(discover.confirm, "request",
+                        lambda *a, **k: called.setdefault("hit", True))
+    ctx = _ctx()
+    ctx.user_data[discover._GEN] = 1
+    common.stash(ctx, discover._MKTS, [m])
+    ctx.user_data[discover._AWAIT_BET] = {"gen": "1", "idx": "0", "side": "yes", "ts": time.monotonic()}
+    upd = _msg_update("abc")
+    await discover.on_custom_amount(upd, ctx)
+    assert "hit" not in called and upd.effective_message.sent  # rejected with a hint
+
+
+# ── multi-wallet picker ────────────────────────────────────────────────────────
+
+async def test_wallet_picker_and_account_threading(monkeypatch):
+    accts = [SimpleNamespace(account_id=1, label="A", wallet_address="0x" + "a" * 40),
+             SimpleNamespace(account_id=2, label="B", wallet_address="0x" + "b" * 40)]
+
+    class _Mgr:
+        async def list_accounts(self, uid):
+            return accts
+
+    monkeypatch.setattr(common, "manager", lambda ctx: _Mgr())
+    monkeypatch.setattr(discover.markets, "get_market_state",
+                        lambda mid: ("open", markets._normalize_market(_gamma_market())))
+    ctx = _ctx(db_user_id=1)
+    msg = _RecMsg()
+    await discover.show_market_for_bet(_update(msg=msg), ctx, "0xCOND",
+                                       preselect_outcome="YES", news_item_id=5)
+    kb = msg.sent[0][1]["reply_markup"]
+    datas = [b.callback_data for row in kb.inline_keyboard for b in row if b.callback_data]
+    assert any(d.startswith("betacct:") for d in datas)  # wallet picker, not amounts
+
+    gen = ctx.user_data[discover._NEWS_BET]["gen"]
+    await discover.on_bet_account(_update(query=_Query(f"betacct:{gen}:2")), ctx)
+    assert ctx.user_data[discover._NEWS_BET]["account_id"] == 2
+
+    captured = {}
+
+    async def fake_request(u, c, i, k, **kw):
+        captured["intent"] = i
+
+    monkeypatch.setattr(discover.confirm, "request", fake_request)
+    await discover._place_bet_amount(_update(msg=_RecMsg()), ctx, gen=gen, idx="0", side="yes", amount=25.0)
+    assert captured["intent"].get("account_id") == 2  # chosen wallet threaded into the order
+
+
+# ── digest two-outcome links ───────────────────────────────────────────────────
+
+def test_build_digest_offers_both_outcomes():
+    it = SimpleNamespace(id=7, title_orig="Head", body_orig="b", url="https://n/x",
+                         translations={"en": {"title": "Head", "summary": "s"}},
+                         cta_url="https://t.me/B?start=n-7", cta_market_id="0xC")
+    out = publisher.build_digest([it], lang="en", header="H", bot_username="B")
+    assert "nb-7-y" in out and "nb-7-n" in out          # both sides offered, no YES bias
+    out2 = publisher.build_digest([it], lang="en", header="H")  # no bot_username
+    assert "nb-7-" not in out2 and "start=n-7" in out2  # single Trade link, unchanged

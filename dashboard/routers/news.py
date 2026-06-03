@@ -71,6 +71,13 @@ def news_settings_page(request: Request, admin: Admin = Depends(require_admin), 
     return deps.render(request, "news_settings.html", admin=admin, settings=repo.news_settings(db))
 
 
+@router.get("/news/bets")
+def news_bets_page(request: Request, admin: Admin = Depends(require_admin), db: Session = Depends(get_db)):
+    """News-driven bets + the deferred-intent conversion funnel (read-only)."""
+    return deps.render(request, "news_bets.html", admin=admin,
+                       overview=repo.news_overview(db), bets=repo.news_bets_overview(db))
+
+
 @router.get("/news/{item_id}")
 def news_item_page(request: Request, item_id: int,
                    admin: Admin = Depends(require_admin), db: Session = Depends(get_db)):

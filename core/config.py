@@ -123,6 +123,13 @@ class Settings(BaseSettings):
     # ── Behaviour ─────────────────────────────────────────
     default_language: str = Field("en", alias="DEFAULT_LANGUAGE")
     log_level: str = Field("INFO", alias="LOG_LEVEL")
+    # Latency: TTL (seconds) for cached Gamma market/trending/category reads — cuts
+    # redundant egress on hot paths (discover funnel, bet taps). 0 disables.
+    markets_cache_ttl_seconds: float = Field(30.0, alias="MARKETS_CACHE_TTL_SECONDS")
+    # Min seconds between per-user middleware DB syncs (last_seen + status refresh);
+    # between syncs the cached db_user_id/lang/status are reused, so most updates do
+    # ZERO DB writes. Coarsens ban-enforcement + last_seen to this granularity.
+    middleware_sync_seconds: float = Field(60.0, alias="MIDDLEWARE_SYNC_SECONDS")
 
     # ── Derived helpers ───────────────────────────────────
     @field_validator("default_language")

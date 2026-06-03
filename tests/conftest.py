@@ -61,6 +61,16 @@ def _clean_db(_schema):
     engine.dispose()
 
 
+@pytest.fixture(autouse=True)
+def _clear_markets_cache():
+    """The markets TTL cache is process-global; clear it around each test so a
+    cached read can't leak across tests."""
+    from polymarket import markets
+    markets.clear_cache()
+    yield
+    markets.clear_cache()
+
+
 @pytest.fixture
 def session():
     s = SessionLocal()

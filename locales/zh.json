@@ -87,7 +87,10 @@
       "book_bids": "*买单（买入）：*",
       "no_book": "`{token}` 暂无可用的订单簿。",
       "choose_amount": "买多少？（USD）",
-      "not_found": "未找到市场——可能已关闭或 id 有误。"
+      "not_found": "未找到市场——可能已关闭或 id 有误。",
+      "custom_amount": "✏️ 自定义",
+      "custom_prompt": "输入金额（USD，例如 15）。",
+      "custom_bad": "请输入 1 到 100000 之间的数字。"
     },
     "trade": {
       "buy_usage": "用法：/buy <token> <price> <size>",
@@ -221,7 +224,8 @@
       "bet_connect_btn": "🔗 连接并下注",
       "bet_connect_prompt": "📊 要对以下内容押 {outcome}：\n\n“{headline}”\n\n请先连接钱包 — 只需一分钟，随后即可在此处继续下注。",
       "bet_closed": "⛔️ 该市场已关闭 — 无法再下注。",
-      "bet_unavailable": "⚠️ 暂时无法加载该市场，请稍后再试。"
+      "bet_unavailable": "⚠️ 暂时无法加载该市场，请稍后再试。",
+      "bet_pick_wallet": "用哪个钱包？"
     }
   },
   "dash": {
@@ -462,7 +466,24 @@
       "pipeline_on": "流水线已启用",
       "pipeline_off": "流水线已停用（设置 NEWS_PIPELINE_ENABLED=1）",
       "keyless_note": "仪表盘从不调用 Gemini 或 Telegram。此处的操作只设置标志，由机器人执行。",
-      "pipeline": "流水线"
+      "pipeline": "流水线",
+      "bets": "下注",
+      "bet_count": "新闻下注",
+      "bet_volume": "金额",
+      "conversion": "转化率",
+      "funnel": "下注意向漏斗",
+      "f_pending": "待处理",
+      "f_resumed": "已恢复",
+      "f_fulfilled": "已完成",
+      "f_expired": "已过期",
+      "f_cancelled": "已取消",
+      "recent": "近期新闻下注",
+      "b_market": "市场",
+      "b_outcome": "结果",
+      "b_amount": "金额",
+      "b_user": "用户",
+      "b_when": "时间",
+      "b_empty": "暂无来自新闻的下注。"
     }
   }
 }

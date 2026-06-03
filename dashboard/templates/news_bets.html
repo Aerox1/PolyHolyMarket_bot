@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% set active_nav = 'news' %}
+{% block title %}{{ t('dash.news.bets') }}{% endblock %}
+
+{% block content %}
+  <div class="page-head">
+    <h1 class="page-title">{{ t('dash.news.bets') }}</h1>
+    <div>
+      <a class="btn sm" href="/news">{{ t('dash.news.queue') }}</a>
+      <a class="btn sm" href="/news/sources">{{ t('dash.news.sources') }}</a>
+      <a class="btn sm" href="/news/settings">{{ t('dash.news.settings') }}</a>
+    </div>
+  </div>
+
+  <div class="metrics">
+    <div class="metric"><div class="metric-label">{{ t('dash.news.bet_count') }}</div>
+      <div class="metric-value green"><bdi class="ltr">{{ bets.total }}</bdi></div></div>
+    <div class="metric"><div class="metric-label">{{ t('dash.news.bet_volume') }}</div>
+      <div class="metric-value"><bdi class="ltr">${{ '%.2f' | format(bets.volume) }}</bdi></div></div>
+    <div class="metric"><div class="metric-label">{{ t('dash.news.conversion') }}</div>
+      <div class="metric-value blue"><bdi class="ltr">{{ bets.conversion }}%</bdi></div></div>
+    <div class="metric"><div class="metric-label">{{ t('dash.news.f_fulfilled') }}</div>
+      <div class="metric-value"><bdi class="ltr">{{ bets.funnel.fulfilled }}/{{ bets.intent_total }}</bdi></div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h2>{{ t('dash.news.funnel') }}</h2></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>{{ t('dash.news.f_pending') }}</th>
+          <th>{{ t('dash.news.f_resumed') }}</th>
+          <th>{{ t('dash.news.f_fulfilled') }}</th>
+          <th>{{ t('dash.news.f_expired') }}</th>
+          <th>{{ t('dash.news.f_cancelled') }}</th>
+        </tr></thead>
+        <tbody><tr>
+          <td><bdi class="ltr">{{ bets.funnel.pending }}</bdi></td>
+          <td><bdi class="ltr">{{ bets.funnel.resumed }}</bdi></td>
+          <td><bdi class="ltr">{{ bets.funnel.fulfilled }}</bdi></td>
+          <td><bdi class="ltr">{{ bets.funnel.expired }}</bdi></td>
+          <td><bdi class="ltr">{{ bets.funnel.cancelled }}</bdi></td>
+        </tr></tbody>
+      </table>
+    </div>
+    <div class="muted" style="padding:.6em 1em">{{ t('dash.news.keyless_note') }}</div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h2>{{ t('dash.news.recent') }}</h2></div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>{{ t('dash.news.b_market') }}</th>
+            <th>{{ t('dash.news.b_outcome') }}</th>
+            <th class="right">{{ t('dash.news.b_amount') }}</th>
+            <th>{{ t('dash.news.status') }}</th>
+            <th>{{ t('dash.news.b_user') }}</th>
+            <th>{{ t('dash.news.b_when') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for b in bets.recent %}
+          <tr>
+            <td><bdi dir="auto">{{ (b.question or b.market_id)[:70] }}</bdi></td>
+            <td><span class="status-pill {% if b.outcome == 'YES' %}active{% endif %}">{{ b.outcome }}</span></td>
+            <td class="right"><bdi class="ltr">${{ '%.2f' | format(b.amount) }}</bdi></td>
+            <td><span class="status-pill {% if b.status == 'WON' %}active{% elif b.status in ('LOST','VOID') %}muted{% endif %}">{{ b.status }}</span></td>
+            <td><bdi class="ltr">{{ b.user_id }}</bdi></td>
+            <td><bdi class="ltr">{{ b.created_at.strftime('%Y-%m-%d %H:%M') if b.created_at else '—' }}</bdi></td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6"><div class="empty">{{ t('dash.news.b_empty') }}</div></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}

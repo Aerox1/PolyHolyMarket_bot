@@ -180,8 +180,11 @@ async def _execute(update: Update, context: ContextTypes.DEFAULT_TYPE, intent: d
         else:
             await respond(key, markup=nav)
 
+    # An explicit account_id (e.g. the news-bet wallet picker) overrides the active
+    # account; absent → the user's default/active account (unchanged behavior).
+    chosen_account = intent.get("account_id")
     try:
-        pm = await common.manager(context).get_trading_client(user_id)
+        pm = await common.manager(context).get_trading_client(user_id, chosen_account)
     except NoAccountConnected:
         await respond("bot.error.no_account")
         return
@@ -193,7 +196,7 @@ async def _execute(update: Update, context: ContextTypes.DEFAULT_TYPE, intent: d
         await respond("bot.error.generic")
         return
 
-    account_id = await common.manager(context).default_account_id(user_id)
+    account_id = await common.manager(context).default_account_id(user_id, chosen_account)
     kind = intent.get("kind")
     side = intent.get("side", "")
     token = intent.get("token_id", "")

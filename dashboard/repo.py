@@ -17,8 +17,8 @@ from sqlalchemy.orm import Session, aliased
 
 from core.config import settings
 from db.models import (
-    Account, AuditLog, Category, NewsItem, NewsSource, Order, PointsLedger,
-    Referral, Trade, User, UserStats, UserStatus,
+    Account, AuditLog, Bet, Category, NewsItem, NewsSource, Order, PendingIntent,
+    PointsLedger, Referral, Trade, User, UserStats, UserStatus,
 )
 from db.repositories import appconfig, gemini_usage
 from db.repositories.rewards import REFERRAL_UNLOCK_BETS
@@ -486,6 +486,34 @@ def news_overview(db: Session) -> dict:
     counts["enabled_sources"] = db.scalar(
         select(func.count()).select_from(NewsSource).where(NewsSource.enabled.is_(True))) or 0
     return counts
+
+
+def news_bets_overview(db: Session, *, limit: int = 50) -> dict:
+    """Settleable bets driven by the news channel (Bet.source='news') + the
+    deferred-intent conversion funnel. Read-only — no secrets (Bet/PendingIntent
+    hold none)."""
+    is_news = Bet.source == "news"
+    total = int(db.scalar(select(func.count()).select_from(Bet).where(is_news)) or 0)
+    volume = float(db.scalar(select(func.coalesce(func.sum(Bet.amount_usd), 0)).where(is_news)) or 0)
+    bet_status = {"OPEN": 0, "WON": 0, "LOST": 0, "VOID": 0}
+    for st, n in db.execute(select(Bet.status, func.count()).where(is_news).group_by(Bet.status)).all():
+        if st in bet_status:
+            bet_status[st] = int(n or 0)
+
+    recent = [
+        {"id": b.id, "user_id": b.user_id, "market_id": b.market_id, "question": b.question,
+         "outcome": b.outcome, "amount": _f(b.amount_usd), "status": b.status, "created_at": b.created_at}
+        for b in db.execute(select(Bet).where(is_news).order_by(Bet.created_at.desc()).limit(limit)).scalars().all()
+    ]
+
+    funnel = {s: 0 for s in ("pending", "resumed", "fulfilled", "expired", "cancelled")}
+    for st, n in db.execute(select(PendingIntent.status, func.count()).group_by(PendingIntent.status)).all():
+        if st in funnel:
+            funnel[st] = int(n or 0)
+    intent_total = sum(funnel.values())
+    conversion = round(funnel["fulfilled"] / intent_total * 100, 1) if intent_total else 0.0
+    return {"total": total, "volume": volume, "status": bet_status, "recent": recent,
+            "funnel": funnel, "intent_total": intent_total, "conversion": conversion}
 
 
 def _news_item_dict(it: NewsItem, *, category: str | None, source: str | None) -> dict:

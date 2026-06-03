@@ -87,7 +87,10 @@
       "book_bids": "*Bids (buy):*",
       "no_book": "No order book available for `{token}`.",
       "choose_amount": "How much? (USD)",
-      "not_found": "Market not found — it may be closed or the id is wrong."
+      "not_found": "Market not found — it may be closed or the id is wrong.",
+      "custom_amount": "✏️ Custom",
+      "custom_prompt": "Type an amount in USD (e.g. 15).",
+      "custom_bad": "Please send a number between 1 and 100000."
     },
     "trade": {
       "buy_usage": "Usage: /buy <token> <price> <size>",
@@ -221,7 +224,8 @@
       "bet_connect_btn": "🔗 Connect & bet",
       "bet_connect_prompt": "📊 To bet {outcome} on:\n\n“{headline}”\n\nConnect your wallet first — it only takes a minute, then your bet picks up right here.",
       "bet_closed": "⛔️ This market has closed — you can't bet on it anymore.",
-      "bet_unavailable": "⚠️ Couldn't load this market right now. Please try again in a moment."
+      "bet_unavailable": "⚠️ Couldn't load this market right now. Please try again in a moment.",
+      "bet_pick_wallet": "Which wallet?"
     }
   },
   "dash": {
@@ -462,7 +466,24 @@
       "pipeline_on": "Pipeline enabled",
       "pipeline_off": "Pipeline disabled (set NEWS_PIPELINE_ENABLED=1)",
       "keyless_note": "The dashboard never calls Gemini or Telegram. Actions here set flags the bot acts on.",
-      "pipeline": "Pipeline"
+      "pipeline": "Pipeline",
+      "bets": "Bets",
+      "bet_count": "News bets",
+      "bet_volume": "Volume",
+      "conversion": "Conversion",
+      "funnel": "Bet-intent funnel",
+      "f_pending": "Pending",
+      "f_resumed": "Resumed",
+      "f_fulfilled": "Fulfilled",
+      "f_expired": "Expired",
+      "f_cancelled": "Cancelled",
+      "recent": "Recent news bets",
+      "b_market": "Market",
+      "b_outcome": "Outcome",
+      "b_amount": "Amount",
+      "b_user": "User",
+      "b_when": "When",
+      "b_empty": "No news-driven bets yet."
     }
   }
 }

@@ -10,14 +10,57 @@ These are blocking httpx calls; async callers (the webapp) wrap them in
 
 from __future__ import annotations
 
+import copy
 import json
 import logging
+import threading
+import time
 
 import httpx
 
 from core.config import settings
 
 logger = logging.getLogger(__name__)
+
+# ── tiny in-process TTL cache for hot Gamma reads ─────────────────────────────
+# Cuts redundant egress on the discover funnel + bet taps (each tap re-resolves
+# the market). Accessed from worker threads (asyncio.to_thread) → guarded by a
+# lock. Only successful reads are cached; transient errors are never cached so a
+# blip retries immediately. TTL from settings.markets_cache_ttl_seconds (0 = off).
+_CACHE: dict[str, tuple[float, object]] = {}
+_CACHE_LOCK = threading.Lock()
+
+
+def _cache_get(key: str):
+    if settings.markets_cache_ttl_seconds <= 0:
+        return None
+    with _CACHE_LOCK:
+        item = _CACHE.get(key)
+        if item is not None and item[0] > time.monotonic():
+            val = item[1]
+            # Hand back a COPY: callers (and concurrent to_thread workers) must never
+            # be able to mutate the shared cached object and corrupt it for others.
+            return copy.deepcopy(val) if isinstance(val, (list, dict, tuple)) else val
+        if item is not None:
+            _CACHE.pop(key, None)
+    return None
+
+
+def _cache_put(key: str, value) -> None:
+    ttl = settings.markets_cache_ttl_seconds
+    if ttl <= 0:
+        return
+    with _CACHE_LOCK:
+        _CACHE[key] = (time.monotonic() + ttl, value)
+        if len(_CACHE) > 1024:  # opportunistic prune of expired entries
+            now = time.monotonic()
+            for k in [k for k, (exp, _v) in _CACHE.items() if exp <= now]:
+                _CACHE.pop(k, None)
+
+
+def clear_cache() -> None:
+    with _CACHE_LOCK:
+        _CACHE.clear()
 
 # Structural / non-topical tags to exclude from the category deck (admins can
 # still hide more in the dashboard).
@@ -53,6 +96,10 @@ def _jsarr(value) -> list:
 
 def top_categories(limit: int = 30, event_scan: int = 120) -> list[dict]:
     """Rank tags by the aggregated 24h volume of the events they appear on."""
+    ck = f"topcat:{limit}:{event_scan}"
+    cached = _cache_get(ck)
+    if cached is not None:
+        return cached
     with _client() as c:
         r = c.get("/events", params={"order": "volume24hr", "ascending": "false",
                                      "closed": "false", "limit": event_scan})
@@ -70,8 +117,9 @@ def top_categories(limit: int = 30, event_scan: int = 120) -> list[dict]:
             row = agg.setdefault(slug, {"slug": slug, "title": label, "tag_id": str(tag.get("id") or ""),
                                         "tag_slug": slug, "volume": 0.0})
             row["volume"] += vol
-    ranked = sorted(agg.values(), key=lambda x: x["volume"], reverse=True)
-    return ranked[:limit]
+    ranked = sorted(agg.values(), key=lambda x: x["volume"], reverse=True)[:limit]
+    _cache_put(ck, ranked)
+    return ranked
 
 
 def _normalize_market(m: dict) -> dict | None:
@@ -105,6 +153,10 @@ def _normalize_market(m: dict) -> dict | None:
 
 def category_markets(tag_slug: str, limit: int = 40) -> list[dict]:
     """Binary markets in a category (tag), sorted by 24h volume desc."""
+    ck = f"catmkt:{tag_slug}:{limit}"
+    cached = _cache_get(ck)
+    if cached is not None:
+        return cached
     with _client() as c:
         r = c.get("/events", params={"tag_slug": tag_slug, "order": "volume24hr",
                                      "ascending": "false", "closed": "false", "limit": 30})
@@ -126,11 +178,17 @@ def category_markets(tag_slug: str, limit: int = 40) -> list[dict]:
             continue
         seen.add(m["id"])
         deduped.append(m)
-    return deduped[:limit]
+    deduped = deduped[:limit]
+    _cache_put(ck, deduped)
+    return deduped
 
 
 def trending_markets(limit: int = 12) -> list[dict]:
     """Top binary markets across all of Polymarket by 24h volume."""
+    ck = f"trending:{limit}"
+    cached = _cache_get(ck)
+    if cached is not None:
+        return cached
     with _client() as c:
         r = c.get("/markets", params={"order": "volume24hr", "ascending": "false",
                                       "closed": "false", "active": "true", "limit": max(limit * 3, 30)})
@@ -144,7 +202,9 @@ def trending_markets(limit: int = 12) -> list[dict]:
             seen.add(nm["id"])
             out.append(nm)
     out.sort(key=lambda x: x["volume"], reverse=True)
-    return out[:limit]
+    out = out[:limit]
+    _cache_put(ck, out)
+    return out
 
 
 def search_markets(query: str, limit: int = 20) -> list[dict]:
@@ -167,12 +227,19 @@ def search_markets(query: str, limit: int = 20) -> list[dict]:
 
 
 def get_market(condition_id: str) -> dict | None:
+    ck = f"market:{condition_id}"
+    cached = _cache_get(ck)
+    if cached is not None:
+        return cached
     with _client() as c:
         r = c.get("/markets", params={"condition_ids": condition_id, "limit": 1})
         if r.status_code != 200:
             return None
         rows = _as_list(r.json())
-    return _normalize_market(rows[0]) if rows else None
+    nm = _normalize_market(rows[0]) if rows else None
+    if nm is not None:  # cache only a successful resolve; None may be a transient miss
+        _cache_put(ck, nm)
+    return nm
 
 
 def get_market_state(condition_id: str) -> tuple[str, dict | None]:
@@ -186,6 +253,10 @@ def get_market_state(condition_id: str) -> tuple[str, dict | None]:
       * ``("closed", None)``  — exists but resolved/inactive/not binary → don't bet
       * ``("error", None)``   — non-200, network error, or empty body → RETRYABLE
     """
+    ck = f"state:{condition_id}"
+    cached = _cache_get(ck)
+    if cached is not None:
+        return cached
     try:
         with _client() as c:
             r = c.get("/markets", params={"condition_ids": condition_id, "limit": 1})
@@ -197,7 +268,9 @@ def get_market_state(condition_id: str) -> tuple[str, dict | None]:
     if not rows:  # empty response for a known id is more likely a hiccup than a tombstone
         return ("error", None)
     nm = _normalize_market(rows[0])
-    return ("open", nm) if nm else ("closed", None)
+    result = ("open", nm) if nm else ("closed", None)
+    _cache_put(ck, result)  # cache open/closed only — the error paths above return early
+    return result
 
 
 def market_resolution(condition_id: str) -> dict:

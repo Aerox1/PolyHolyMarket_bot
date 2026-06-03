@@ -97,10 +97,15 @@ def build_caption(item, *, lang: str, cap: int) -> str:
     return out
 
 
-def build_digest(items, *, lang: str, header: str) -> str:
+def build_digest(items, *, lang: str, header: str, bot_username: str | None = None) -> str:
     """A per-user DM bundling several items (used by realtime + daily digest).
     Each item is short (title + clipped summary + a CTA link), so the total stays
-    well under the 4096 message cap; items are pre-limited by the caller."""
+    well under the 4096 message cap; items are pre-limited by the caller.
+
+    When an item has a resolved market AND we know the bot username, both outcomes
+    are offered as inline links (Bet YES / Bet NO) so neither side is favored;
+    otherwise a single Trade/Open link (channel buttons aren't possible in a DM
+    that bundles many items)."""
     blocks = [f"<b>{_esc(header)}</b>"] if header else []
     for it in items:
         tr = _best_translation(it, lang)
@@ -108,10 +113,16 @@ def build_digest(items, *, lang: str, header: str) -> str:
         summary = (tr.get("summary") or "").strip()[:240]
         if summary:
             line += f"\n{_esc(summary)}"
-        link = it.cta_url or it.url
-        if link:
-            label = t("bot.news.cta_trade", lang) if it.cta_market_id else t("bot.news.cta_open", lang)
-            line += f'\n🔗 <a href="{_esc(link)}">{_esc(label)}</a>'
+        if it.cta_market_id and bot_username:
+            yes = cta_mod.bet_deeplink(bot_username, item_id=it.id, outcome="YES")
+            no = cta_mod.bet_deeplink(bot_username, item_id=it.id, outcome="NO")
+            line += (f'\n<a href="{_esc(yes)}">{_esc(t("bot.news.bet_yes", lang))}</a>'
+                     f' · <a href="{_esc(no)}">{_esc(t("bot.news.bet_no", lang))}</a>')
+        else:
+            link = it.cta_url or it.url
+            if link:
+                label = t("bot.news.cta_trade", lang) if it.cta_market_id else t("bot.news.cta_open", lang)
+                line += f'\n🔗 <a href="{_esc(link)}">{_esc(label)}</a>'
         blocks.append(line)
     blocks.append(_esc(t("bot.news.nfa_footer", lang)))
     return "\n\n".join(blocks)

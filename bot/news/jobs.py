@@ -230,7 +230,8 @@ async def _deliver(context, *, mode: str, channel: str, header_key: str) -> None
             snaps = [publisher.snapshot(it) for it in items]
             item_ids = [it.id for it in items]
 
-        text = publisher.build_digest(snaps, lang=lang, header=t(header_key, lang))
+        text = publisher.build_digest(snaps, lang=lang, header=t(header_key, lang),
+                                      bot_username=getattr(bot, "username", None))
         try:
             await bot.send_message(chat_id=telegram_id, text=text, parse_mode="HTML",
                                    disable_web_page_preview=True)
