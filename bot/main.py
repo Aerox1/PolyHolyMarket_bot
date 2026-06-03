@@ -123,7 +123,10 @@ def main() -> None:
     setup_logging()
     logger.info("Starting Polymarket trading bot…")
     app = build_application()
-    app.run_polling(allowed_updates=Update.ALL_TYPES)
+    # bootstrap_retries=-1: retry the startup getMe indefinitely instead of aborting
+    # on the first network timeout, so a transient egress blip / VPN flap at launch
+    # doesn't kill the process — it waits and connects once Telegram is reachable.
+    app.run_polling(allowed_updates=Update.ALL_TYPES, bootstrap_retries=-1)
 
 
 if __name__ == "__main__":
