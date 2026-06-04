@@ -99,8 +99,11 @@ def test_build_keyboard_bet_vs_open_and_none():
                                          cta_url="https://t.me/B?start=n-7"), bot_username="B", lang="en")
     urls = [b.url for row in bet.inline_keyboard for b in row]
     texts = [b.text for row in bet.inline_keyboard for b in row]
+    assert all(len(row) == 1 for row in bet.inline_keyboard)  # stacked: one button per row
     assert urls == ["https://t.me/B?start=nb-7-0", "https://t.me/B?start=nb-7-1"]
-    assert "Yes" in texts[0] and "No" in texts[1]
+    # action-first CTA: "✅ Bet Yes · 60%" / "❌ Bet No · 40%"
+    assert texts[0].startswith("✅ Bet Yes") and "60%" in texts[0]
+    assert texts[1].startswith("❌ Bet No") and "40%" in texts[1]
     # no resolved outcomes → the single "Open in bot" link (unchanged)
     openb = publisher.build_keyboard(_item(cta_market_id=None, cta_url="https://t.me/B?start=n-7"),
                                      bot_username="B", lang="en")
@@ -253,6 +256,8 @@ async def test_publish_job_posts_engagement_poll_under_card():
     assert pkw["question"] == "Will this resolve YES?"
     assert pkw["options"] == ["Yes", "No"]
     assert pkw["is_anonymous"] is True and pkw["type"] == "regular"
+    # poll is threaded UNDER the card (reply-linked to the card's message id 202)
+    assert pkw["reply_parameters"].message_id == 202
 
 
 async def test_publish_job_poll_can_be_disabled():

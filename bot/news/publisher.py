@@ -17,7 +17,7 @@ import logging
 import re
 from types import SimpleNamespace
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyParameters
 from telegram.error import BadRequest, TelegramError
 
 from bot.news import cta as cta_mod
@@ -51,12 +51,15 @@ def _pct(price) -> str:
 
 
 def _outcome_text(outcome: dict) -> str:
-    """Button/link text for a dynamic outcome: '✅ Yes 12%', '❌ No 88%', or a
-    candidate/bucket like 'Democrats 63%'."""
+    """Button/link text for a dynamic bet outcome — action-first so the wager is
+    unambiguous: '✅ Bet Yes · 73%', '❌ Bet No · 27%', '📈 Bet <65,000 · 73%'
+    (the market question is shown above, in the caption). The trailing % is the
+    market's live odds for that outcome."""
     label = (outcome.get("label") or "?").strip()
-    pre = "✅ " if label == "Yes" else "❌ " if label == "No" else ""
+    emoji = "✅" if label == "Yes" else "❌" if label == "No" else "📈"
     pct = _pct(outcome.get("price"))
-    return f"{pre}{label} {pct}".strip()
+    text = f"{emoji} Bet {label}"
+    return f"{text} · {pct}" if pct else text
 
 
 def snapshot(item) -> SimpleNamespace:
@@ -190,10 +193,11 @@ def build_keyboard(item, *, bot_username: str | None, lang: str) -> InlineKeyboa
     # (never from the payload), so labels can carry the (render-time) odds.
     outcomes = list(getattr(item, "cta_outcomes", None) or [])
     if outcomes and bot_username:
-        btns = [InlineKeyboardButton(_outcome_text(o),
-                                     url=cta_mod.bet_deeplink(bot_username, item_id=item.id, index=i))
+        # one button PER ROW (stacked) — the action-first labels ("📈 Bet <65,000
+        # · 73%") read far better full-width than squeezed two-up.
+        rows = [[InlineKeyboardButton(_outcome_text(o),
+                                      url=cta_mod.bet_deeplink(bot_username, item_id=item.id, index=i))]
                 for i, o in enumerate(outcomes)]
-        rows = [btns[j:j + 2] for j in range(0, len(btns), 2)]  # 2 per row
         return InlineKeyboardMarkup(rows)
     url = item.cta_url or (cta_mod.news_deeplink(bot_username, item_id=item.id) if bot_username else None)
     if not url:
@@ -279,18 +283,22 @@ async def _send_card(bot, item, *, chat_id: int, lang: str, bot_username: str | 
         return None
 
 
-async def _send_poll(bot, item, *, chat_id: int) -> None:
-    """Best-effort engagement poll posted under the card. NON-FATAL: a poll failure
-    must never fail the item (the card is already sent + claimed) — a missing poll
-    is fine, a re-sent card is not. Anonymous regular poll (no 'correct' answer —
-    the event is unresolved)."""
+async def _send_poll(bot, item, *, chat_id: int, reply_to: int | None = None) -> None:
+    """Best-effort engagement poll threaded UNDER the news card. NON-FATAL: a poll
+    failure must never fail the item (the card is already sent + claimed) — a
+    missing poll is fine, a re-sent card is not. Anonymous regular poll (no
+    'correct' answer — the event is unresolved). ``reply_to`` links it to the card
+    so Telegram groups them ('inline with the news'); a poll can't be embedded in
+    the photo/text message itself."""
     poll = build_poll(item)
     if not poll:
         return
     question, options = poll
+    # allow_sending_without_reply: still post the poll even if the card vanished
+    reply = ReplyParameters(message_id=reply_to, allow_sending_without_reply=True) if reply_to else None
     try:
         await bot.send_poll(chat_id=chat_id, question=question, options=options,
-                            is_anonymous=True, type="regular")
+                            is_anonymous=True, type="regular", reply_parameters=reply)
     except TelegramError as exc:
         logger.info("poll send failed for item %s: %s", item.id, type(exc).__name__)
 
@@ -303,5 +311,5 @@ async def post_item_to_channel(bot, item, *, chat_id: int, lang: str,
     follow-up message and never affects the return value."""
     msg_id = await _send_card(bot, item, chat_id=chat_id, lang=lang, bot_username=bot_username)
     if msg_id is not None and with_poll:
-        await _send_poll(bot, item, chat_id=chat_id)
+        await _send_poll(bot, item, chat_id=chat_id, reply_to=msg_id)  # thread it under the card
     return msg_id
