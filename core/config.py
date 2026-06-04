@@ -89,6 +89,20 @@ class Settings(BaseSettings):
     # Directory where generated category card images are cached (served at /cards).
     cards_dir: str = Field("data/cards", alias="CARDS_DIR")
 
+    # ── Claude (news text via the Claude Agent SDK — NOT the Anthropic API) ──
+    # Provider for news translate/summarize: "claude" (Claude Agent SDK, uses the
+    # local Claude CLI + subscription auth — reaches Anthropic, so it works even
+    # when the VPN blocks Gemini/Google) or "gemini" (legacy REST). Image
+    # generation always stays on Gemini (Claude has no image model).
+    news_text_provider: str = Field("claude", alias="NEWS_TEXT_PROVIDER")
+    # Absolute path to the `claude` CLI the SDK drives. Empty → auto-detect
+    # (CLAUDE_CODE_EXECPATH, else `claude` on PATH). Set this for a detached bot
+    # launched outside Claude Code (e.g. the VS Code extension's bundled binary,
+    # or a standalone `claude` install).
+    claude_cli_path: str = Field("", alias="CLAUDE_CLI_PATH")
+    # Optional model override for Claude text calls (empty → CLI default).
+    claude_text_model: str = Field("", alias="CLAUDE_TEXT_MODEL")
+
     # ── News pipeline ─────────────────────────────────────
     # Master switch — when false, the crawl/render/publish jobs are NOT registered.
     news_pipeline_enabled: bool = Field(False, alias="NEWS_PIPELINE_ENABLED")

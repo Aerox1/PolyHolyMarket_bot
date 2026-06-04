@@ -19,6 +19,11 @@ python-multipart>=0.0.9     # form login
 itsdangerous>=2.2           # signed session cookies
 argon2-cffi>=23.1           # admin password hashing
 
+# ── News text generation (Claude Agent SDK — drives the local Claude CLI via
+#    subscription auth; NOT the Anthropic API). Reaches Anthropic, so it works
+#    when the VPN blocks Gemini. Requires a `claude` CLI (CLAUDE_CLI_PATH). ──────
+claude-agent-sdk>=0.2.89
+
 # ── News pipeline (crawl / parse / render) ───────────────
 feedparser>=6.0.11          # RSS/Atom parsing
 trafilatura>=1.12           # HTML article extraction (pulls lxml, courlan, htmldate)

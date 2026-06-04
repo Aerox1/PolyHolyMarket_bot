@@ -273,11 +273,16 @@ async def translate_summarize_news(
     session: AsyncSession, *, title: str, body: str,
     target_langs: tuple[str, ...] = SUPPORTED_LANGUAGES, tone_prompt: str = "",
 ) -> dict[str, dict[str, str]] | None:
-    """ONE budget-charged Gemini call → ``{lang: {"title","summary"}}`` for all
-    target languages. Returns None on no-key / budget / failure (caller passes
-    through the source-language text). Malformed entries are dropped."""
+    """ONE budget-charged call → ``{lang: {"title","summary"}}`` for all target
+    languages. Routed to Claude (Agent SDK) or Gemini per ``news_text_provider``;
+    Claude reaches Anthropic so it works when the VPN blocks Gemini. Returns None
+    on no-provider / budget / failure (caller passes through source text)."""
     prompt = _build_translate_prompt(title, body or title, target_langs, tone_prompt)
-    raw = await generate_text(session, prompt=prompt, kind="news_text", response_json=True)
+    if settings.news_text_provider == "claude":
+        from core import claude_text
+        raw = await claude_text.generate_json(session, prompt=prompt, kind="news_text")
+    else:
+        raw = await generate_text(session, prompt=prompt, kind="news_text", response_json=True)
     if raw is None:
         return None
     try:

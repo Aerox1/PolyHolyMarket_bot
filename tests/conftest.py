@@ -23,6 +23,12 @@ os.environ.setdefault("SESSION_SECRET", "test-session-secret")
 # carry a real bot token / gemini key). Force the test-relevant flags here.
 os.environ["WEBAPP_DEV_AUTH"] = "false"
 os.environ["GEMINI_API_KEY"] = ""
+# News text defaults to the Claude provider in production; pin tests to the Gemini
+# path (fully mocked everywhere) so the suite never spawns the real Claude CLI.
+# The dedicated tests/test_claude_text.py exercises the Claude path with the SDK
+# call mocked.
+os.environ["NEWS_TEXT_PROVIDER"] = "gemini"
+os.environ["CLAUDE_CLI_PATH"] = ""
 os.environ["TELEGRAM_BOT_TOKEN"] = "test-token"
 # Disable SQLite WAL in tests: WAL gives the sync + async engines divergent read
 # snapshots of the same file, which broke cross-engine test isolation.
