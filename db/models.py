@@ -395,6 +395,10 @@ class UserStats(Base):
     __table_args__ = (
         Index("ix_user_stats_bets", "total_bets"),
         Index("ix_user_stats_volume", "total_volume_usd"),
+        # All four leaderboard metrics (METRICS in db.repositories.stats) sort on a
+        # column, so index pnl + wins too — not just bets/volume.
+        Index("ix_user_stats_pnl", "realized_pnl_usd"),
+        Index("ix_user_stats_wins", "wins"),
     )
 
 

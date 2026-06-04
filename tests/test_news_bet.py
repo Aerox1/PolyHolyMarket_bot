@@ -186,6 +186,23 @@ def test_place_capped_buy_clamps_price_to_tick_range():
     assert clob2.created[0].price == 0.01
 
 
+def test_place_capped_buy_floors_size_so_cost_never_exceeds_amount():
+    # 25 / 0.77 = 32.4675 — rounding up to 32.47 would cost 25.0019 (> $25); the
+    # floor to the 0.01 tick keeps cost = size*price ≤ the requested amount.
+    clob = _FakeClob()
+    _pm_with_clob(clob).place_capped_buy("t", 25.0, 0.77)
+    size = clob.created[0].size
+    assert size == 32.46
+    assert size * 0.77 <= 25.0
+
+
+def test_place_capped_buy_rejects_subtick_amount():
+    from polymarket.credentials import TradingUnavailable
+    # $0.001 at the 0.99 ceiling floors to 0 shares → degenerate order is refused.
+    with pytest.raises(TradingUnavailable):
+        _pm_with_clob(_FakeClob()).place_capped_buy("t", 0.001, 0.99)
+
+
 # ── pending-intent repo (Phase C) ──────────────────────────────────────────────
 
 async def _seed_user(tg_id=555):

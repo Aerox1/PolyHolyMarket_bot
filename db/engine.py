@@ -74,7 +74,11 @@ _AsyncSessionLocal: async_sessionmaker[AsyncSession] | None = None
 def async_engine():
     global _async_engine
     if _async_engine is None:
-        _async_engine = create_async_engine(settings.async_database_url, pool_pre_ping=True, future=True)
+        kwargs: dict = {"pool_pre_ping": True, "future": True}
+        if not _IS_SQLITE:  # QueuePool sizing applies to Postgres, not the sqlite dev/test engine
+            kwargs["pool_size"] = settings.db_pool_size
+            kwargs["max_overflow"] = settings.db_max_overflow
+        _async_engine = create_async_engine(settings.async_database_url, **kwargs)
         if _IS_SQLITE:
             event.listen(_async_engine.sync_engine, "connect", _sqlite_pragmas)
     return _async_engine

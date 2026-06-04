@@ -9,6 +9,8 @@
 *.sqlite3
 *.db
 data/
+*.log
+logs/
 webapp/frontend/node_modules
 webapp/frontend/dist
 node_modules

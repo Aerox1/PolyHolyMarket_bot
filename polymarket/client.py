@@ -15,6 +15,7 @@ Credential levels (verified against py-clob-client):
 from __future__ import annotations
 
 import logging
+import math
 
 import httpx
 from py_clob_client.client import ClobClient
@@ -278,7 +279,11 @@ class Polymarket:
         """
         clob = self._require_signing()
         price = min(max(float(max_price), 0.01), 0.99)  # valid CLOB tick range
-        size = round(float(amount) / price, 2)          # shares; cost ≤ amount at the ceiling
+        # FLOOR (not round) to the 0.01 share tick so cost = size*price never exceeds
+        # the requested `amount` (rounding up could overspend by up to one tick).
+        size = math.floor(float(amount) / price * 100) / 100
+        if size <= 0:
+            raise TradingUnavailable("amount too small to buy a share at the capped price")
         order_args = OrderArgs(token_id=token_id, price=price, size=size, side=BUY)
         options = PartialCreateOrderOptions(neg_risk=neg_risk) if neg_risk is not None else None
         signed = clob.create_order(order_args, options)

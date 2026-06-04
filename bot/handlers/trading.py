@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 
 from telegram import InlineKeyboardButton, Update
 from telegram.ext import Application, CommandHandler, ContextTypes
@@ -24,6 +25,11 @@ from bot.handlers import common, confirm, positions_ui
 from polymarket.credentials import NoAccountConnected, TradingUnavailable
 
 logger = logging.getLogger(__name__)
+
+# Sane bounds for a market BUY's USD amount — same range the Mini App / news CTAs
+# enforce, so a fat-fingered command can't place a wildly oversized real order.
+_MIN_BET_USD = 0.5
+_MAX_BET_USD = 1000.0
 
 
 def _short(token: str) -> str:  # thin alias — single implementation lives in common.short
@@ -99,7 +105,13 @@ async def _market(update: Update, context: ContextTypes.DEFAULT_TYPE, side: str,
         await common.reply(update, context, "bot.trade.bad_number", reply_markup=_browse_kb(context))
         return
     amount = nums[0]
-    if amount <= 0:
+    if not math.isfinite(amount) or amount <= 0:
+        await common.reply(update, context, "bot.trade.bad_amount")
+        return
+    # A market BUY's amount is USD — clamp to a sane range so a mistyped command
+    # can't submit a wildly oversized real order. (A market SELL's amount is a
+    # SHARE count, not USD, so the USD cap doesn't apply.)
+    if side == "buy" and not (_MIN_BET_USD <= amount <= _MAX_BET_USD):
         await common.reply(update, context, "bot.trade.bad_amount")
         return
     intent = confirm.make_intent("market", side=side, token_id=token, amount=amount)

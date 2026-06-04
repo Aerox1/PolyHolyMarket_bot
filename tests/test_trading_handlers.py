@@ -174,6 +174,21 @@ async def test_marketbuy_valid_builds_market_buy_intent(rec):
     assert c["vars"]["token"] == trading.common.short("0xABC")
 
 
+async def test_marketbuy_over_cap_replies_bad_amount(rec):
+    # A BUY's amount is USD — an oversized one is rejected before building an intent.
+    msg = _RecMsg()
+    await trading.marketbuy(_update(msg), _ctx(["0xT", "5000"]))
+    assert rec == []
+    assert "Amount must be" in msg.sent[0][0]
+
+
+async def test_marketsell_large_share_count_allowed(rec):
+    # A SELL's amount is a SHARE count, not USD — the USD cap must NOT apply.
+    await trading.marketsell(_update(), _ctx(["0xDEF", "5000"]))
+    assert len(rec) == 1 and rec[0]["intent"]["side"] == "sell"
+    assert rec[0]["intent"]["amount"] == 5000.0
+
+
 # ── /marketsell (market sell in shares) ──────────────────────────────────────────
 
 async def test_marketsell_no_args_routes_to_manage(rec, monkeypatch):

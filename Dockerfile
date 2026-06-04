@@ -2,7 +2,9 @@
 FROM node:20-slim AS frontend
 WORKDIR /fe
 COPY webapp/frontend/package*.json ./
-RUN npm install
+# `npm ci` installs the exact committed lockfile (reproducible; fails on drift),
+# unlike `npm install` which can resolve newer/compromised versions.
+RUN npm ci
 COPY webapp/frontend/ ./
 RUN npm run build
 
@@ -25,6 +27,14 @@ RUN pip install --upgrade pip && pip install -r requirements.txt
 COPY . .
 # Built SPA from stage 1 (so the webapp service can serve it at /).
 COPY --from=frontend /fe/dist ./webapp/frontend/dist
+
+# Drop root: run as an unprivileged user so a parser RCE (lxml/Pillow/trafilatura)
+# can't escalate to root in the container. Pre-create + own the writable cards dir
+# so the mounted named volume inherits non-root ownership.
+RUN adduser --system --group --no-create-home appuser \
+    && mkdir -p /app/data/cards \
+    && chown -R appuser:appuser /app/data
+USER appuser
 
 # Default command is the bot; compose overrides per service.
 CMD ["python", "-m", "bot.main"]

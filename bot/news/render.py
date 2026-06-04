@@ -22,6 +22,10 @@ from db.models import Category, NewsItem
 logger = logging.getLogger(__name__)
 
 _SUMMARY_CAP = 600
+# A 2–3 sentence summary needs only a few thousand chars of source — cap what we
+# send to the translate/summarize LLM so one oversized article can't blow up token
+# cost (the budget ledger charges a flat notional, so it wouldn't otherwise gate).
+_LLM_BODY_CAP = 4000
 
 
 def _clip_summary(text: str | None, limit: int = _SUMMARY_CAP) -> str:
@@ -62,7 +66,8 @@ async def render_item(
     # committing usage in its own scope if it ever bites.
     item.status = "translating"
     translated = await gemini.translate_summarize_news(
-        session, title=item.title_orig, body=item.body_orig or "", target_langs=target_langs
+        session, title=item.title_orig, body=(item.body_orig or "")[:_LLM_BODY_CAP],
+        target_langs=target_langs,
     )
     if translated:
         item.translations.update(translated)  # MutableDict — tracked + persisted

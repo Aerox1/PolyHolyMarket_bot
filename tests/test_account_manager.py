@@ -68,6 +68,26 @@ async def test_invalidate_forces_rebuild():
     assert store.decrypt_calls == 2
 
 
+async def test_invalidate_prunes_idle_lock():
+    # The per-key lock must be reclaimed with the cached client, so the lock map
+    # doesn't grow unbounded over the process lifetime.
+    store = FakeStore()
+    mgr = AccountManager(store)
+    await mgr.get_trading_client(1)
+    assert (1, 7) in mgr._locks
+    mgr.invalidate(1)
+    assert (1, 7) not in mgr._locks
+
+
+async def test_clear_drops_idle_locks():
+    store = FakeStore()
+    mgr = AccountManager(store)
+    await mgr.get_trading_client(1)
+    assert mgr._locks
+    mgr.clear()
+    assert mgr._locks == {}
+
+
 async def test_no_account_raises():
     mgr = AccountManager(FakeStore())
     with pytest.raises(NoAccountConnected):

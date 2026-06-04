@@ -99,14 +99,26 @@ class AccountManager:
             entry = self._cache.pop((user_id, account_id), None)
             if entry:
                 entry.dispose()
+            self._drop_lock((user_id, account_id))
             return
         for key in [k for k in self._cache if k[0] == user_id]:
             self._cache.pop(key).dispose()
+            self._drop_lock(key)
 
     def clear(self) -> None:
         for entry in self._cache.values():
             entry.dispose()
         self._cache.clear()
+        # Keep only locks currently held (a concurrent build); drop the rest so the
+        # lock map doesn't grow unbounded over the process lifetime.
+        self._locks = {k: lk for k, lk in self._locks.items() if lk.locked()}
+
+    def _drop_lock(self, key: tuple[int, int]) -> None:
+        """Reclaim a per-key lock once its client is gone — but never yank one that's
+        currently held (a concurrent build owns it and will release it)."""
+        lk = self._locks.get(key)
+        if lk is not None and not lk.locked():
+            self._locks.pop(key, None)
 
     # ── internals ─────────────────────────────────────────────────────────────
 

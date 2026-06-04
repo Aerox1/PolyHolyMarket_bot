@@ -40,6 +40,11 @@ class Settings(BaseSettings):
         alias="DATABASE_URL",
     )
     database_url_async: str = Field("", alias="DATABASE_URL_ASYNC")
+    # Connection-pool sizing (applied to the Postgres engines). The bot's async
+    # engine is the most concurrency-sensitive process, so it gets the same headroom
+    # as the sync (dashboard/worker) engine instead of SQLAlchemy's tiny 5+10 default.
+    db_pool_size: int = Field(10, alias="DB_POOL_SIZE")
+    db_max_overflow: int = Field(20, alias="DB_MAX_OVERFLOW")
 
     # ── Dashboard ─────────────────────────────────────────
     dashboard_host: str = Field("0.0.0.0", alias="DASHBOARD_HOST")
@@ -148,6 +153,12 @@ class Settings(BaseSettings):
     # ── Behaviour ─────────────────────────────────────────
     default_language: str = Field("en", alias="DEFAULT_LANGUAGE")
     log_level: str = Field("INFO", alias="LOG_LEVEL")
+    # Optional rotating log file. Empty → log to stderr only (unchanged). When set,
+    # logs ALSO go to this file with size-based rotation (so a long-running bot
+    # can't grow an unbounded bot.log).
+    log_file: str = Field("", alias="LOG_FILE")
+    log_max_bytes: int = Field(10_000_000, alias="LOG_MAX_BYTES")
+    log_backup_count: int = Field(5, alias="LOG_BACKUP_COUNT")
     # Latency: TTL (seconds) for cached Gamma market/trending/category reads — cuts
     # redundant egress on hot paths (discover funnel, bet taps). 0 disables.
     markets_cache_ttl_seconds: float = Field(30.0, alias="MARKETS_CACHE_TTL_SECONDS")

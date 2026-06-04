@@ -76,7 +76,17 @@ def create_app() -> FastAPI:
                     await gemini.generate_welcome_image(s)
             except Exception as exc:  # noqa: BLE001
                 logger.warning("startup category sync skipped: %s", type(exc).__name__)
-        asyncio.create_task(_bg())
+
+        def _done(t: asyncio.Task) -> None:
+            if not t.cancelled() and t.exception() is not None:
+                logger.warning("startup bg task failed: %s", type(t.exception()).__name__)
+
+        # Retain a strong reference: asyncio only holds a weak ref to tasks, so a
+        # bare create_task() can be garbage-collected mid-run, silently cancelling
+        # the category sync / image generation.
+        task = asyncio.create_task(_bg())
+        app.state._bg_task = task
+        task.add_done_callback(_done)
 
     # The built React SPA (mounted LAST so /api and /cards win). Guard if not built.
     if _FRONTEND_DIST.exists():
