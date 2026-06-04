@@ -29,23 +29,37 @@ SETTLEMENT_INTERVAL_SECONDS = 180
 
 async def broadcast_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Deliver pending BROADCAST commands (a few per tick to respect rate limits)."""
+    # 1) Snapshot the batch (resolve recipients) in a short scope, marking malformed
+    #    rows as errors immediately — so we never hold a DB connection across the
+    #    Telegram sends (which can stall on a slow/blocked endpoint).
     async with async_session_scope() as session:
         cmds = await commands_repo.pending(session, action="BROADCAST", limit=25)
+        jobs: list[tuple[int, int, str]] = []  # (cmd_id, telegram_id, message)
         for cmd in cmds:
             message = (cmd.payload or {}).get("message", "")
             telegram_id = await commands_repo.telegram_id_for(session, cmd.user_id)
             if not message or telegram_id is None:
                 await commands_repo.mark(session, cmd.id, "error")
                 continue
-            try:
-                await context.bot.send_message(chat_id=telegram_id, text=message)
-                await commands_repo.mark(session, cmd.id, "done")
-            except Forbidden:
-                # user blocked the bot — not retryable
-                await commands_repo.mark(session, cmd.id, "error")
-            except TelegramError as exc:
-                logger.warning("broadcast send failed for cmd %s: %s", cmd.id, type(exc).__name__)
-                await commands_repo.mark(session, cmd.id, "error")
+            jobs.append((cmd.id, telegram_id, message))
+
+    # 2) Send OUTSIDE any transaction; collect each row's outcome.
+    results: list[tuple[int, str]] = []
+    for cmd_id, telegram_id, message in jobs:
+        try:
+            await context.bot.send_message(chat_id=telegram_id, text=message)
+            results.append((cmd_id, "done"))
+        except Forbidden:  # user blocked the bot — not retryable
+            results.append((cmd_id, "error"))
+        except TelegramError as exc:
+            logger.warning("broadcast send failed for cmd %s: %s", cmd_id, type(exc).__name__)
+            results.append((cmd_id, "error"))
+
+    # 3) Persist outcomes in a short scope.
+    if results:
+        async with async_session_scope() as session:
+            for cmd_id, status in results:
+                await commands_repo.mark(session, cmd_id, status)
 
 
 def _settle_message(bet, vals: dict, lang: str) -> str:

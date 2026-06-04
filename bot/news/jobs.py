@@ -14,6 +14,7 @@ import logging
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from telegram.error import Forbidden, TelegramError
 from telegram.ext import Application, ContextTypes
@@ -22,7 +23,7 @@ from bot.news import crawler, cta as cta_mod, publisher, render as render_mod
 from core.config import settings
 from core.i18n import t
 from db.engine import async_session_scope
-from db.models import NewsItem, UserSettings
+from db.models import NewsItem, UserNewsPrefs, UserSettings
 from db.repositories import appconfig
 from db.repositories import news_delivery
 from db.repositories import news_items as items_repo
@@ -124,15 +125,23 @@ async def crawl_job(context: ContextTypes.DEFAULT_TYPE) -> None:
 async def render_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     bot_username = getattr(context.bot, "username", None)
     async with async_session_scope() as session:
-        items = await items_repo.needing_render(session, limit=10)
-        for item in items:
-            item_id = item.id  # savepoint rollback expires ORM attrs — capture first
-            try:
-                async with session.begin_nested():
-                    await render_mod.render_item(session, item, bot_username=bot_username)
-            except Exception:  # noqa: BLE001 — isolate one bad item, keep rendering the rest
-                logger.exception("news render failed for item %s; left for retry", item_id)
-                continue
+        item_ids = [i.id for i in await items_repo.needing_render(session, limit=10)]
+    # Render each item in its OWN short-lived session. render_item makes a slow
+    # translate/summarize LLM call (Claude subprocess / up to 90s Gemini); giving
+    # each item its own scope means the DB connection is held in-transaction for ONE
+    # item at a time and committed between items — not one connection pinned across
+    # the whole 10-item batch — and completed items survive a crash mid-batch.
+    # (render_job is max_instances=1, so no concurrent run can race the re-fetch.)
+    for item_id in item_ids:
+        try:
+            async with async_session_scope() as session:
+                item = await session.get(NewsItem, item_id)
+                if item is None:
+                    continue
+                await render_mod.render_item(session, item, bot_username=bot_username)
+        except Exception:  # noqa: BLE001 — isolate one bad item, keep rendering the rest
+            logger.exception("news render failed for item %s; left for retry", item_id)
+            continue
 
 
 async def _channel_chat_id(session) -> int | None:
@@ -242,32 +251,48 @@ async def _deliver(context, *, mode: str, channel: str, header_key: str) -> None
     digest = channel == "digest"
     async with async_session_scope() as session:
         targets = await news_delivery.users_for(session, mode)
-    if not targets:
-        return
+        if not targets:
+            return
+        # Batch-load prefs + settings for ALL opted-in targets (2 queries) instead of
+        # 2 per user. expire_on_commit=False keeps the loaded columns readable after
+        # the scope closes, so the per-user loop reads them detached (no re-query).
+        user_ids = [t[0] for t in targets]
+        prefs_by_id = {
+            p.user_id: p
+            for p in await session.scalars(
+                select(UserNewsPrefs).where(UserNewsPrefs.user_id.in_(user_ids)))
+        }
+        tz_by_id = {
+            s.user_id: s.timezone
+            for s in await session.scalars(
+                select(UserSettings).where(UserSettings.user_id.in_(user_ids)))
+        }
     now = datetime.now(timezone.utc)
     sent = 0
     for user_id, telegram_id, lang in targets:
         if sent >= settings.news_per_tick_cap:
             break
+        # opted-in users always have a prefs row (set_delivery created it); defensive.
+        prefs = prefs_by_id.get(user_id)
+        if prefs is None:
+            continue
+        local = now.astimezone(_user_tz(tz_by_id.get(user_id) or "UTC"))
+        # quiet hours suppress REALTIME pings only — a scheduled daily digest
+        # fires at the user's chosen hour regardless.
+        if not digest and _in_quiet_hours(local.hour, prefs.quiet_start, prefs.quiet_end):
+            continue
+        if digest:
+            if local.hour != prefs.digest_hour:
+                continue
+            last = prefs.last_digest_at
+            if last is not None:
+                if last.tzinfo is None:  # SQLite returns naive — it's stored UTC
+                    last = last.replace(tzinfo=timezone.utc)
+                if last.astimezone(local.tzinfo).date() == local.date():
+                    continue  # already sent a digest today
         # gather candidates in a short read scope (snapshot so we don't hold the
         # connection across the send)
         async with async_session_scope() as session:
-            prefs = await news_prefs.get_or_create(session, user_id)
-            us = await session.get(UserSettings, user_id)
-            local = now.astimezone(_user_tz(us.timezone if us else "UTC"))
-            # quiet hours suppress REALTIME pings only — a scheduled daily digest
-            # fires at the user's chosen hour regardless.
-            if not digest and _in_quiet_hours(local.hour, prefs.quiet_start, prefs.quiet_end):
-                continue
-            if digest:
-                if local.hour != prefs.digest_hour:
-                    continue
-                last = prefs.last_digest_at
-                if last is not None:
-                    if last.tzinfo is None:  # SQLite returns naive — it's stored UTC
-                        last = last.replace(tzinfo=timezone.utc)
-                    if last.astimezone(local.tzinfo).date() == local.date():
-                        continue  # already sent a digest today
             followed = await news_prefs.followed_ids(session, user_id)
             mkts = await news_delivery.user_market_ids(session, user_id)
             limit = prefs.max_per_digest if digest else settings.news_realtime_max

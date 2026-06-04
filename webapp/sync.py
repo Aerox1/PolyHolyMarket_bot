@@ -42,13 +42,21 @@ async def generate_pending_images(max_images: int = 30) -> int:
     whole batch)."""
     generated = 0
     cost = settings.gemini_image_cost_usd
+    # Snapshot the work-list (ids) in a short scope, then process each image in its
+    # OWN session so progress (status + path + usage) is committed per image and a
+    # DB connection isn't pinned idle across the multi-minute generation loop.
     async with async_session_scope() as session:
-        pending = await categories_repo.needing_images(session, limit=max_images)
-        budget = await appconfig.get_float(session, appconfig.GEMINI_WEEKLY_BUDGET, settings.gemini_weekly_budget_usd)
-        for i, cat in enumerate(pending):
+        pending_ids = [c.id for c in await categories_repo.needing_images(session, limit=max_images)]
+    for i, cat_id in enumerate(pending_ids):
+        async with async_session_scope() as session:
+            budget = await appconfig.get_float(
+                session, appconfig.GEMINI_WEEKLY_BUDGET, settings.gemini_weekly_budget_usd)
             if await gemini_usage.weekly_spend(session) + cost > budget:
                 logger.info("Gemini weekly budget reached — stopping image generation")
                 break
+            cat = await categories_repo.get(session, cat_id)
+            if cat is None:
+                continue
             if i:
                 await asyncio.sleep(_GEN_DELAY_SECONDS)
             path = await gemini.generate_category_image(session, cat)
