@@ -44,6 +44,16 @@ def create_app() -> FastAPI:
     # Per-user signing client factory (this process has ENCRYPTION_KEY).
     app.state.account_manager = AccountManager(DbCredentialStore(async_session_factory()))
 
+    @app.middleware("http")
+    async def _security_headers(request, call_next):
+        """Safe headers for the Mini App. NB: no X-Frame-Options/frame-ancestors —
+        the Mini App is intentionally embedded by the Telegram web client; we only
+        forbid MIME sniffing and trim referer leakage."""
+        response = await call_next(request)
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        return response
+
     app.include_router(api.router)
 
     # Cached Gemini category images.

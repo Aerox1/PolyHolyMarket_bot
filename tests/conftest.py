@@ -19,6 +19,12 @@ os.environ["DATABASE_URL"] = f"sqlite:///{_TMPDIR}/test.db"
 os.environ["DATABASE_URL_ASYNC"] = f"sqlite+aiosqlite:///{_TMPDIR}/test.db"
 os.environ.setdefault("TELEGRAM_BOT_TOKEN", "test-token")
 os.environ.setdefault("SESSION_SECRET", "test-session-secret")
+# The suite runs the dashboard in the SAME process as the bot/webapp (which need
+# ENCRYPTION_KEY), so opt the dashboard's "must be keyless" boot guard out here.
+os.environ["DASHBOARD_ALLOW_ENCRYPTION_KEY"] = "true"
+# Tests drive the dashboard over plain http via TestClient, so the Secure-only
+# session cookie (now the prod default) would not round-trip — pin it off here.
+os.environ["DASHBOARD_COOKIE_SECURE"] = "false"
 # Isolate the suite from a developer's local .env (which may enable dev-auth or
 # carry a real bot token / gemini key). Force the test-relevant flags here.
 os.environ["WEBAPP_DEV_AUTH"] = "false"
@@ -89,6 +95,26 @@ def _clean_db(_schema):
     if dbe._async_engine is not None:
         dbe._async_engine.sync_engine.dispose()
     engine.dispose()
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limiters():
+    """The dashboard login / mini-app bet limiters are process-global; reset them
+    around each test so accumulated hits from earlier tests don't trip a 429."""
+    def _clear():
+        try:
+            from dashboard.auth import _login_limiter
+            _login_limiter.clear()
+        except Exception:
+            pass
+        try:
+            from webapp.routers.api import _bet_limiter
+            _bet_limiter.clear()
+        except Exception:
+            pass
+    _clear()
+    yield
+    _clear()
 
 
 @pytest.fixture(autouse=True)

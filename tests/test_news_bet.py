@@ -582,6 +582,23 @@ async def test_record_news_bet_creates_settleable_bet_and_fulfills_intent():
         assert (await s.get(PendingIntent, pid)).status == "fulfilled"
 
 
+async def test_record_news_bet_uses_executed_ceiling_not_stale_quote():
+    """When the intent carries a slippage cap, the recorded entry is the executed
+    ceiling (what the FOK order is sized at), not the lower pre-tap quote — so the
+    derived shares match the shares actually acquired and the payout isn't inflated."""
+    uid = await _seed_user(tg_id=802)
+    intent = {"kind": "market", "side": "buy", "source": "news", "market_id": "0xCOND",
+              "token_id": "tokYES", "outcome": "YES", "amount": 25.0,
+              "entry_price": 0.70, "max_price": round(0.70 * 1.05, 4),  # 0.735
+              "title": "Will it rain?"}
+    await confirm._record_news_bet(uid, None, intent, "ORDER-2")
+    async with async_session_scope() as s:
+        from sqlalchemy import select
+        bet = await s.scalar(select(Bet))
+        assert float(bet.entry_price) == pytest.approx(0.735)        # the cap, not 0.70
+        assert float(bet.shares) == pytest.approx(25.0 / 0.735)      # fewer shares → no over-credit
+
+
 # ── custom typed amount ───────────────────────────────────────────────────────
 
 async def test_custom_amount_arms_then_places(monkeypatch):

@@ -146,11 +146,54 @@ async def test_assert_public_url_resolves_hostname(monkeypatch):
     # public-resolving host passes; private-resolving host is rejected
     monkeypatch.setattr(crawler.socket, "getaddrinfo",
                         lambda *a, **k: [(2, 1, 6, "", ("93.184.216.34", 0))])
-    await crawler._assert_public_url("https://example.com/feed")
+    assert await crawler._assert_public_url("https://example.com/feed") == "93.184.216.34"
     monkeypatch.setattr(crawler.socket, "getaddrinfo",
                         lambda *a, **k: [(2, 1, 6, "", ("10.1.2.3", 0))])
     with pytest.raises(UnsafeUrlError):
         await crawler._assert_public_url("https://intranet.local/feed")
+
+
+def test_connect_target_pins_dns_host_to_ip():
+    # DNS host → connect to the vetted IP, keep hostname for Host + TLS SNI.
+    url, headers, ext = crawler._connect_target("https://example.com/feed?x=1", "93.184.216.34")
+    assert url == "https://93.184.216.34/feed?x=1"
+    assert headers == {"Host": "example.com"}
+    assert ext == {"sni_hostname": "example.com"}
+    # Non-default port is preserved on both the connect URL and the Host header.
+    url2, headers2, _ = crawler._connect_target("https://example.com:8443/x", "93.184.216.34")
+    assert url2 == "https://93.184.216.34:8443/x" and headers2 == {"Host": "example.com:8443"}
+    # IP-literal host → nothing to rebind, connect unchanged (no extensions).
+    assert crawler._connect_target("https://8.8.8.8/feed", "8.8.8.8") == ("https://8.8.8.8/feed", {}, None)
+
+
+async def test_http_get_pins_resolved_ip_against_rebinding(monkeypatch):
+    # A hostname resolving to a public IP: the socket must target that IP while the
+    # request keeps the hostname (Host header + SNI), so a rebind to an internal IP
+    # at connect time can't happen.
+    monkeypatch.setattr(crawler.socket, "getaddrinfo",
+                        lambda *a, **k: [(2, 1, 6, "", ("93.184.216.34", 0))])
+
+    captured = {}
+
+    class _CapClient:
+        def stream(self, method, url, headers=None, extensions=None):
+            captured["url"] = url
+            captured["headers"] = headers
+            captured["extensions"] = extensions
+            return _FakeStream(200, {"content-type": "text/html"}, b"ok")
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+    monkeypatch.setattr(crawler.httpx, "AsyncClient", lambda *a, **k: _CapClient())
+    status, text, _ = await crawler._http_get("https://example.com/feed")
+    assert status == 200 and text == "ok"
+    assert captured["url"] == "https://93.184.216.34/feed"        # pinned to the vetted IP
+    assert captured["headers"]["Host"] == "example.com"           # hostname preserved
+    assert captured["extensions"] == {"sni_hostname": "example.com"}  # TLS verifies vs hostname
 
 
 # ── parsing (HTTP mocked) ────────────────────────────────────────────────────

@@ -325,14 +325,26 @@ async def _record_news_bet(user_id: int, account_id: int | None, intent: dict,
     try:
         from db.repositories import bets as bets_repo
         from db.repositories import pending_intents as intents_repo
-        ep = intent.get("entry_price")
+        # Record the price the order ACTUALLY executed at, not the pre-tap quote.
+        # A news bet places a slippage-capped FOK limit at `max_price` (clamped to
+        # the CLOB tick range), sized so `amount/price` shares are bought — so the
+        # executed ceiling, not the stale quote, is the true entry. This makes
+        # settlement's shares = amount/entry_price equal the FOK-sized shares
+        # actually acquired; recording the lower pre-tap quote would over-credit the
+        # win payout. Fall back to the quote only when no cap is present.
+        mp = intent.get("max_price")
+        if mp is not None:
+            entry = min(max(float(mp), 0.01), 0.99)  # mirror Polymarket.place_capped_buy clamp
+        else:
+            ep = intent.get("entry_price")
+            entry = float(ep) if ep is not None else None
         async with async_session_scope() as session:
             await bets_repo.create_bet(
                 session, user_id=user_id, account_id=account_id,
                 market_id=intent.get("market_id") or "", token_id=intent.get("token_id") or "",
                 question=intent.get("title"), outcome=intent.get("outcome") or "",
                 amount_usd=float(intent.get("amount") or 0),
-                entry_price=float(ep) if ep is not None else None,
+                entry_price=entry,
                 source="news", clob_order_id=clob_order_id,
             )
             pid = intent.get("pending_intent_id")

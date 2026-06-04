@@ -9,7 +9,9 @@ services:
     image: postgres:16
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-pmbot}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pmbot}
+      # No default — compose refuses to start unless a strong password is set in
+      # .env. (Never ship a working credential; the DB holds the encrypted key vault.)
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env (no default)}
       POSTGRES_DB: ${POSTGRES_DB:-pmbot}
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -18,8 +20,12 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    # Bind to loopback ONLY. The other services reach Postgres over the internal
+    # compose network as `postgres:5432` (set DATABASE_URL host to `postgres`), so
+    # the DB never needs to be published on 0.0.0.0 — doing so would expose the
+    # encrypted wallet-key vault + admin hash to the host's whole network.
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
 
   migrate:
     build: .

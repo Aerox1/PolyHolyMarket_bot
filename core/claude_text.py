@@ -13,6 +13,7 @@ render job.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import shutil
@@ -81,16 +82,22 @@ async def _query(prompt: str) -> tuple[str | None, float]:
     chunks: list[str] = []
     cost = 0.0
     try:
-        async for msg in query(prompt=prompt, options=opts):
-            if isinstance(msg, AssistantMessage):
-                for block in msg.content:
-                    if isinstance(block, TextBlock):
-                        chunks.append(block.text)
-            elif isinstance(msg, ResultMessage):
-                cost = float(getattr(msg, "total_cost_usd", 0) or 0)
-                if getattr(msg, "is_error", False):
-                    logger.info("Claude text returned is_error=True")
-    except Exception as exc:  # noqa: BLE001 — never fail the render on a CLI hiccup
+        # Bound the whole query: a hung CLI subprocess (network stall reaching
+        # Anthropic, or one that never emits a ResultMessage) would otherwise await
+        # forever and wedge the single-instance render job. TimeoutError is a
+        # subclass of Exception (3.11+), so the handler below catches it too.
+        async with asyncio.timeout(settings.claude_text_timeout_seconds):
+            async for msg in query(prompt=prompt, options=opts):
+                if isinstance(msg, AssistantMessage):
+                    for block in msg.content:
+                        if isinstance(block, TextBlock):
+                            chunks.append(block.text)
+                elif isinstance(msg, ResultMessage):
+                    cost = float(getattr(msg, "total_cost_usd", 0) or 0)
+                    if getattr(msg, "is_error", False):
+                        logger.info("Claude text returned is_error=True")
+                    break  # final message — stop even if the CLI never closes the stream
+    except Exception as exc:  # noqa: BLE001 — never fail the render on a CLI hiccup/timeout
         logger.warning("Claude text failed: %s", type(exc).__name__)
         return None, 0.0
     return ("".join(chunks).strip() or None), cost

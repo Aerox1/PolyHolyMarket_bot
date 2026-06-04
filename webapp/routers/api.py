@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core import audit
 from core.audit import AuditEvent
+from core.ratelimit import RateLimiter
 from db.models import User
 from db.repositories import accounts as accounts_repo
 from db.repositories import bets as bets_repo
@@ -33,6 +34,10 @@ router = APIRouter(prefix="/api")
 
 _MAX_BET_USD = 1000.0
 _MIN_BET_USD = 0.5
+_MAX_BET_BODY_BYTES = 4096  # the bet payload is tiny; reject oversized bodies
+# Per-user flood guard on the real-money bet endpoint (process-global; tests reset
+# it via clear()). Caps accidental double-taps / scripted order spam.
+_bet_limiter = RateLimiter(max_events=5, window_seconds=10.0)
 
 
 # ── account ───────────────────────────────────────────────────────────────────
@@ -148,6 +153,13 @@ async def place_bet(
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
+    # Reject oversized bodies, then throttle per user (real-money endpoint).
+    clen = request.headers.get("content-length")
+    if clen and clen.isdigit() and int(clen) > _MAX_BET_BODY_BYTES:
+        raise HTTPException(status_code=413, detail="payload too large")
+    if not _bet_limiter.allow(user.id):
+        raise HTTPException(status_code=429, detail="rate_limited")
+
     market_id = str(payload.get("market_id") or "")
     outcome = str(payload.get("outcome") or "").lower()
     try:

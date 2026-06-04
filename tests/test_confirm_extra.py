@@ -349,7 +349,9 @@ async def test_execute_news_success_records_bet_and_fulfills_intent(monkeypatch)
     async with async_session_scope() as s:
         bet = await s.scalar(select(Bet))
         assert bet is not None and bet.source == "news" and bet.outcome == "YES"
-        assert bet.clob_order_id == "OID-NEWS" and float(bet.entry_price) == 0.70
+        # entry is the executed FOK ceiling (max_price=0.74), not the stale 0.70
+        # quote — so the derived shares match what the order was actually sized for.
+        assert bet.clob_order_id == "OID-NEWS" and float(bet.entry_price) == 0.74
         assert (await s.get(PendingIntent, pid)).status == "fulfilled"
 
 

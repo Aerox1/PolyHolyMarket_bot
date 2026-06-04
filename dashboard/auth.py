@@ -18,17 +18,26 @@ from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from starlette.status import HTTP_303_SEE_OTHER, HTTP_401_UNAUTHORIZED
+from starlette.status import (
+    HTTP_303_SEE_OTHER,
+    HTTP_401_UNAUTHORIZED,
+    HTTP_429_TOO_MANY_REQUESTS,
+)
 
 from core import audit
 from core.audit import AuditEvent
 from core.crypto import verify_password
 from core.i18n import SUPPORTED, t
+from core.ratelimit import RateLimiter
 from dashboard import deps
 from dashboard.deps import current_admin, get_db, require_admin, verify_csrf
 from db.models import Admin
 
 router = APIRouter()
+
+# Per-IP brute-force throttle on the login endpoint (argon2 verify is already slow,
+# but this caps online guessing). Process-global; tests reset it via clear().
+_login_limiter = RateLimiter(max_events=10, window_seconds=60.0)
 
 # A well-formed argon2id hash used to keep timing roughly constant when the
 # supplied username does not exist, reducing user-enumeration via response time.
@@ -60,6 +69,15 @@ def login_submit(
     db: Session = Depends(get_db),
     _csrf: None = Depends(verify_csrf),
 ):
+    ip = _client_ip(request) or "unknown"
+    if not _login_limiter.allow(ip):
+        audit.record(db, AuditEvent.ADMIN_LOGIN_FAIL, actor_type="admin",
+                     detail={"username": username, "reason": "rate_limited"}, ip=ip)
+        lang = deps.dash_lang(request)
+        response = deps.render(request, "login.html", error=t("dash.login.failed", lang))
+        response.status_code = HTTP_429_TOO_MANY_REQUESTS
+        return response
+
     admin = db.execute(
         select(Admin).where(Admin.username == username)
     ).scalar_one_or_none()

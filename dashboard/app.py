@@ -27,6 +27,20 @@ _STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 def create_app() -> FastAPI:
     setup_logging()
+
+    # Hard security boundary, self-enforced in code (not just by the compose env
+    # allowlist): the dashboard must NOT be able to decrypt wallet keys. If a
+    # usable ENCRYPTION_KEY was loaded into this process — e.g. a bare-metal launch
+    # from the repo root that read ./.env — refuse to boot rather than silently
+    # holding the master key in an internet-facing process.
+    from core.crypto import encryption_available
+    if encryption_available() and not settings.dashboard_allow_encryption_key:
+        raise RuntimeError(
+            "Dashboard must run WITHOUT ENCRYPTION_KEY — it must not be able to "
+            "decrypt wallet keys. Unset ENCRYPTION_KEY for the dashboard process "
+            "(or set DASHBOARD_ALLOW_ENCRYPTION_KEY=true for a trusted test run)."
+        )
+
     app = FastAPI(title="Polymarket Bot Admin", docs_url=None, redoc_url=None)
 
     secret = settings.session_secret or secrets.token_urlsafe(32)
@@ -38,6 +52,21 @@ def create_app() -> FastAPI:
         https_only=settings.dashboard_cookie_secure,  # set DASHBOARD_COOKIE_SECURE=true behind TLS
         same_site="lax",
     )
+
+    @app.middleware("http")
+    async def _security_headers(request, call_next):
+        """Defence-in-depth headers. The admin panel must never be framed
+        (clickjacking an admin into banning users / broadcasting), so deny framing
+        and forbid MIME sniffing / referer leakage. HSTS only when behind TLS."""
+        response = await call_next(request)
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Content-Security-Policy", "frame-ancestors 'none'")
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("Referrer-Policy", "no-referrer")
+        if settings.dashboard_cookie_secure:
+            response.headers.setdefault(
+                "Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+        return response
 
     _STATIC_DIR.mkdir(parents=True, exist_ok=True)
     app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")

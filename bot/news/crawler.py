@@ -17,7 +17,7 @@ import logging
 import re
 import socket
 from dataclasses import dataclass
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin, urlparse, urlsplit, urlunsplit
 
 import httpx
 
@@ -117,11 +117,14 @@ def _ip_is_blocked(ip: str) -> bool:
             or addr.is_reserved or addr.is_multicast or addr.is_unspecified)
 
 
-async def _assert_public_url(url: str) -> None:
-    """Reject non-http(s) schemes and hosts resolving to non-public IPs.
+async def _assert_public_url(url: str) -> str:
+    """Reject non-http(s) schemes and hosts resolving to non-public IPs, and
+    return a single validated IP to pin the connection to.
 
-    Best-effort (does not defend against DNS-rebinding mid-redirect — acceptable
-    for admin-curated sources in v1)."""
+    Pinning the resolved IP (see :func:`_connect_target`) closes the DNS-rebinding
+    TOCTOU gap: without it httpx would independently RE-resolve the hostname at
+    connect time, so a host whose DNS flips public→internal between this check and
+    the connect could still reach 169.254.169.254 / internal services."""
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https"):
         raise UnsafeUrlError(f"scheme not allowed: {parsed.scheme!r}")
@@ -140,6 +143,27 @@ async def _assert_public_url(url: str) -> None:
         addrs = [info[4][0] for info in infos]
     if not addrs or any(_ip_is_blocked(a) for a in addrs):
         raise UnsafeUrlError(f"host resolves to a non-public address: {host}")
+    return addrs[0]  # pin the connection to this vetted IP
+
+
+def _connect_target(url: str, pinned_ip: str) -> tuple[str, dict, dict | None]:
+    """Build ``(connect_url, extra_headers, extensions)`` that pin the TCP socket to
+    the pre-validated ``pinned_ip`` while preserving the original hostname for the
+    Host header and TLS SNI / certificate verification.
+
+    For IP-literal hosts there is nothing to rebind (no DNS lookup), so connect
+    unchanged. For DNS hosts we connect to the IP directly so httpx cannot
+    re-resolve to a different (internal) address between the SSRF check and connect."""
+    parts = urlsplit(url)
+    host = parts.hostname or ""
+    if not host or pinned_ip == host:  # IP literal or nothing to pin
+        return url, {}, None
+    ip_netloc = f"[{pinned_ip}]" if ":" in pinned_ip else pinned_ip
+    if parts.port:
+        ip_netloc = f"{ip_netloc}:{parts.port}"
+    connect_url = urlunsplit((parts.scheme, ip_netloc, parts.path, parts.query, parts.fragment))
+    host_header = host if not parts.port else f"{host}:{parts.port}"
+    return connect_url, {"Host": host_header}, {"sni_hostname": host}
 
 
 # ── HTTP ─────────────────────────────────────────────────────────────────────
@@ -174,10 +198,14 @@ def _looks_like_challenge_page(text: str) -> bool:
 _MAX_REDIRECTS = 5
 
 
-async def _stream_capped(client: httpx.AsyncClient, url: str, extra_headers: dict) -> tuple[int, httpx.Headers, str]:
+async def _stream_capped(client: httpx.AsyncClient, url: str, extra_headers: dict,
+                         extensions: dict | None = None) -> tuple[int, httpx.Headers, str]:
     """One GET (no auto-redirect). Redirects return empty body; other responses
     are streamed with a hard byte cap (defeats gzip-bombs / lying content-length)."""
-    async with client.stream("GET", url, headers=extra_headers) as r:
+    kwargs: dict = {"headers": extra_headers}
+    if extensions:  # only set when pinning a DNS host (keeps IP-literal calls unchanged)
+        kwargs["extensions"] = extensions
+    async with client.stream("GET", url, **kwargs) as r:
         if 300 <= r.status_code < 400:
             return r.status_code, r.headers, ""
         clen = r.headers.get("content-length")
@@ -196,7 +224,7 @@ async def _http_get(url: str) -> tuple[int, str, str]:
     """GET with an SSRF guard re-applied on EVERY redirect hop. Returns
     (status, text, content_type). Referer is per-request and dropped on a 403
     retry (client carries none, so the retry is genuinely bare)."""
-    await _assert_public_url(url)
+    pinned_ip = await _assert_public_url(url)
     # NOTE: no Referer at client level — httpx merges client headers onto request
     # headers, so a client-level Referer would survive the "bare" 403 retry.
     limits = httpx.Limits(max_connections=10)
@@ -205,15 +233,20 @@ async def _http_get(url: str) -> tuple[int, str, str]:
         headers=dict(_BROWSER_HEADERS), trust_env=settings.news_crawl_trust_env, limits=limits,
     ) as client:
         current = url
+        current_ip = pinned_ip
         for _ in range(_MAX_REDIRECTS + 1):
             host = urlparse(current).hostname or ""
+            # Connect to the vetted IP (no DNS re-resolution) while keeping the
+            # hostname for Host + TLS; revalidated + repinned on every redirect hop.
+            connect_url, host_header, extensions = _connect_target(current, current_ip)
             referer = {"Referer": f"https://{host}/"} if host else {}
-            status, headers, text = await _stream_capped(client, current, referer)
+            status, headers, text = await _stream_capped(
+                client, connect_url, {**referer, **host_header}, extensions)
             if status == 403 and referer:  # some CDNs reject the first hit with a Referer
-                status, headers, text = await _stream_capped(client, current, {})
+                status, headers, text = await _stream_capped(client, connect_url, host_header, extensions)
             if 300 <= status < 400 and headers.get("location"):
                 nxt = urljoin(current, headers["location"])
-                await _assert_public_url(nxt)  # re-validate the redirect target
+                current_ip = await _assert_public_url(nxt)  # re-validate + re-pin the redirect target
                 current = nxt
                 continue
             return status, text, headers.get("content-type", "")
@@ -226,7 +259,12 @@ def _hero_from_html(html: str) -> str | None:
     soup = BeautifulSoup(html, "html.parser")
     og = soup.find("meta", property="og:image")
     if og and og.has_attr("content"):
-        return (og["content"] or "").strip() or None  # ignore empty/whitespace content
+        src = (og["content"] or "").strip()
+        # The og:image comes from attacker-controllable article HTML and is later
+        # handed to Telegram to fetch. Only accept http(s) URLs — reject
+        # javascript:/data:/relative/other schemes outright.
+        if src and urlparse(src).scheme in ("http", "https"):
+            return src
     return None
 
 
@@ -250,8 +288,12 @@ async def fetch_articles(url: str, kind: str = "auto", limit: int = 10) -> list[
 
     items: list[FetchedArticle] = []
 
+    # feedparser / trafilatura / BeautifulSoup are CPU-heavy synchronous parsers
+    # working on untrusted HTML/XML up to news_crawl_max_bytes. Run them in a worker
+    # thread so a large feed/article can't stall the event loop (and every
+    # concurrent user's trade command) for the duration of the parse.
     if kind in {"auto", "rss"} and ("xml" in ctype or _looks_like_rss(body)):
-        feed = feedparser.parse(body)
+        feed = await asyncio.to_thread(feedparser.parse, body)
         # <language> is a channel-level element; per-entry language is rare. Fall
         # back to the feed language so non-English sources are labelled correctly.
         feed_lang = feed.feed.get("language") if getattr(feed, "feed", None) else None
@@ -265,25 +307,28 @@ async def fetch_articles(url: str, kind: str = "auto", limit: int = 10) -> list[
                 continue
             if art_status >= 400:
                 continue
-            text = trafilatura.extract(art_body, include_links=False, include_images=False) \
-                or entry.get("summary", "")
+            text = await asyncio.to_thread(
+                trafilatura.extract, art_body, include_links=False, include_images=False)
+            text = text or entry.get("summary", "")
             if _looks_like_challenge_page(text):
                 continue
             title = (entry.get("title") or "")[:512]
             items.append(FetchedArticle(
                 url=link, url_hash=url_hash(link), title=title,
                 body=clean_body(title, text or ""), lang=entry.get("language") or feed_lang,
-                hero_image=_hero_from_html(art_body),
+                hero_image=await asyncio.to_thread(_hero_from_html, art_body),
             ))
         return items
 
     # single HTML article
-    text = trafilatura.extract(body, include_links=False, include_images=False)
+    text = await asyncio.to_thread(
+        trafilatura.extract, body, include_links=False, include_images=False)
     if not text or _looks_like_challenge_page(text):
         return []
-    title = _title_from_html(body)
+    title = await asyncio.to_thread(_title_from_html, body)
     items.append(FetchedArticle(
         url=url, url_hash=url_hash(url), title=title,
-        body=clean_body(title, text), lang=None, hero_image=_hero_from_html(body),
+        body=clean_body(title, text), lang=None,
+        hero_image=await asyncio.to_thread(_hero_from_html, body),
     ))
     return items

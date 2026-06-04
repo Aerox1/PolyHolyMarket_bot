@@ -45,7 +45,13 @@ class Settings(BaseSettings):
     dashboard_host: str = Field("0.0.0.0", alias="DASHBOARD_HOST")
     dashboard_port: int = Field(8877, alias="DASHBOARD_PORT")
     session_secret: str = Field("", alias="SESSION_SECRET")
-    dashboard_cookie_secure: bool = Field(False, alias="DASHBOARD_COOKIE_SECURE")
+    # Default True (fail-safe): the admin session cookie is Secure-only, so it is
+    # never sent over plaintext HTTP. Set false ONLY for local dev without TLS.
+    dashboard_cookie_secure: bool = Field(True, alias="DASHBOARD_COOKIE_SECURE")
+    # Safety: the dashboard refuses to boot if a usable ENCRYPTION_KEY is present in
+    # its process (it must never be able to decrypt wallet keys). The test harness —
+    # which shares one process/key with the bot/webapp suites — sets this to opt out.
+    dashboard_allow_encryption_key: bool = Field(False, alias="DASHBOARD_ALLOW_ENCRYPTION_KEY")
     admin_bootstrap_user: str = Field("admin", alias="ADMIN_BOOTSTRAP_USER")
     admin_bootstrap_password_hash: str = Field("", alias="ADMIN_BOOTSTRAP_PASSWORD_HASH")
 
@@ -102,6 +108,11 @@ class Settings(BaseSettings):
     claude_cli_path: str = Field("", alias="CLAUDE_CLI_PATH")
     # Optional model override for Claude text calls (empty → CLI default).
     claude_text_model: str = Field("", alias="CLAUDE_TEXT_MODEL")
+    # Hard ceiling (seconds) on a single Claude CLI query. A hung subprocess would
+    # otherwise wedge the whole news render pipeline (max_instances=1) indefinitely;
+    # on timeout the item degrades to source-language passthrough. Above the SDK's
+    # 60s init handshake so a normal slow call still completes.
+    claude_text_timeout_seconds: float = Field(120.0, alias="CLAUDE_TEXT_TIMEOUT_SECONDS")
 
     # ── News pipeline ─────────────────────────────────────
     # Master switch — when false, the crawl/render/publish jobs are NOT registered.
