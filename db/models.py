@@ -32,6 +32,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.ext.mutable import MutableDict
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -408,9 +409,18 @@ class PointsLedger(Base):
     delta: Mapped[int] = mapped_column(Integer, nullable=False)
     reason: Mapped[str] = mapped_column(String(32), nullable=False)   # bet|win|streak|signup|referral_l1|...
     ref: Mapped[str | None] = mapped_column(String(64))               # e.g. bet id / invitee id
+    # UTC day ('YYYY-MM-DD') of a once-per-day award (streak); NULL for all other
+    # reasons. Backs the partial unique index that makes the streak bonus idempotent
+    # per day (closes the check-then-insert race across concurrent bet placements).
+    day_bucket: Mapped[str | None] = mapped_column(String(10))
     created_at: Mapped[datetime] = _now()
 
-    __table_args__ = (Index("ix_points_user", "user_id"),)
+    __table_args__ = (
+        Index("ix_points_user", "user_id"),
+        Index("uq_ledger_streak_day", "user_id", "day_bucket", unique=True,
+              sqlite_where=text("reason = 'streak'"),
+              postgresql_where=text("reason = 'streak'")),
+    )
 
 
 class Referral(Base):
@@ -550,6 +560,11 @@ class NewsItem(Base):
     # CTA → Polymarket market (resolved once at render, cached on the row)
     market_id: Mapped[str | None] = mapped_column(String(128))       # article-level hint
     cta_market_id: Mapped[str | None] = mapped_column(String(128))   # resolved/pinned target
+    cta_market_question: Mapped[str | None] = mapped_column(String(300))  # shown next to the bet so the wager is clear
+    # Dynamic bet options for the channel post: list of {label, market_id, side, price}.
+    # One outcome = buy `side` on `market_id` (resolved fresh at click). Multi-outcome
+    # events store their real choices (candidates/buckets); binaries store Yes/No.
+    cta_outcomes: Mapped[list | None] = mapped_column(JSON)
     cta_url: Mapped[str | None] = mapped_column(String(512))
     cta_resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     channel_msg_id: Mapped[int | None] = mapped_column(BigInteger)   # for later edit/share

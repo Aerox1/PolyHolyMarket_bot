@@ -47,11 +47,45 @@ async def needing_render(session: AsyncSession, limit: int = 20) -> list[NewsIte
     ))
 
 
-async def ready_to_publish(session: AsyncSession, limit: int = 20) -> list[NewsItem]:
-    return list(await session.scalars(
-        select(NewsItem).where(NewsItem.status == "ready")
+async def ready_to_publish(session: AsyncSession, limit: int = 20, *, require_market: bool = True) -> list[NewsItem]:
+    """Rendered items awaiting channel publish. With ``require_market`` (the
+    bet-relevant-only mode), items without a resolved market are withheld — they
+    stay 'ready' but dormant rather than posting as a betless headline."""
+    stmt = select(NewsItem).where(NewsItem.status == "ready")
+    if require_market:
+        stmt = stmt.where(NewsItem.cta_market_id.is_not(None))
+    return list(await session.scalars(stmt.order_by(NewsItem.score.desc(), NewsItem.id.asc()).limit(limit)))
+
+
+async def auto_approve_ids(session: AsyncSession, item_ids: list[int], limit: int) -> int:
+    """Promote up to ``limit`` highest-scoring still-'backlog' items (from the given
+    ids) to 'approved', so the render→publish pipeline picks them up. Used by the
+    autosend setting: only the best of a crawl cycle's fresh items auto-publish; the
+    rest stay in backlog for manual review. Returns how many were promoted."""
+    if not item_ids or limit <= 0:
+        return 0
+    rows = list(await session.scalars(
+        select(NewsItem).where(NewsItem.id.in_(item_ids), NewsItem.status == "backlog")
         .order_by(NewsItem.score.desc(), NewsItem.id.asc()).limit(limit)
     ))
+    for it in rows:
+        it.status = "approved"
+    return len(rows)
+
+
+async def approve_ids(session: AsyncSession, item_ids: list[int]) -> int:
+    """Promote ALL still-'backlog' items among the given ids to 'approved' (no
+    score cap). Used by trending auto-approval: every fresh item that matches an
+    actively-bet market goes to the render→publish pipeline, not just the top-N.
+    Idempotent (only touches 'backlog' rows). Returns how many were promoted."""
+    if not item_ids:
+        return 0
+    rows = list(await session.scalars(
+        select(NewsItem).where(NewsItem.id.in_(item_ids), NewsItem.status == "backlog")
+    ))
+    for it in rows:
+        it.status = "approved"
+    return len(rows)
 
 
 async def channel_post(session: AsyncSession, item_id: int, chat_id: int, lang: str) -> NewsChannelPost | None:

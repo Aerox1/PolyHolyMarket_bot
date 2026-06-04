@@ -16,8 +16,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db.models import PendingIntent
 
 
-def _idem_key(user_id: int, news_item_id: int | None, outcome: str) -> str:
-    return hashlib.sha256(f"{user_id}:{news_item_id}:{outcome.upper()}".encode()).hexdigest()
+def _idem_key(user_id: int, news_item_id: int | None, market_id: str, outcome: str) -> str:
+    # Include market_id: a multi-outcome event's candidates all bet side YES, so
+    # without the (sub)market in the key, tapping two different candidates would
+    # collide on (user:item:YES) and overwrite each other.
+    return hashlib.sha256(
+        f"{user_id}:{news_item_id}:{market_id}:{outcome.upper()}".encode()).hexdigest()
 
 
 def _aware(dt: datetime | None) -> datetime | None:
@@ -31,11 +35,12 @@ async def upsert_intent(
     session: AsyncSession, *, user_id: int, news_item_id: int | None, market_id: str,
     outcome: str, question: str | None = None, source: str = "news", ttl_hours: int = 24,
 ) -> PendingIntent:
-    """Create or refresh a pending intent. Idempotent on (user, item, outcome): a
-    repeat tap of the SAME outcome updates the existing row; tapping the OTHER
-    outcome adds a second row (resume picks the newest = last-tap-wins)."""
+    """Create or refresh a pending intent. Idempotent on (user, item, market,
+    outcome): a repeat tap of the SAME outcome updates the existing row; tapping a
+    DIFFERENT outcome/candidate adds a second row (resume picks the newest =
+    last-tap-wins)."""
     outcome = outcome.upper()
-    key = _idem_key(user_id, news_item_id, outcome)
+    key = _idem_key(user_id, news_item_id, market_id, outcome)
     expires = datetime.now(timezone.utc) + timedelta(hours=ttl_hours)
     row = await session.scalar(select(PendingIntent).where(PendingIntent.idempotency_key == key))
     if row is None:

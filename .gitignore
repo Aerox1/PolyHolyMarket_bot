@@ -41,6 +41,9 @@ logs/
 .vscode/
 .DS_Store
 
+# ── Claude Code local state (runtime locks, session config) ──
+.claude/
+
 # TS build cache
 *.tsbuildinfo
 

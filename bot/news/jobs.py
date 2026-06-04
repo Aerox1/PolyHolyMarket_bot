@@ -18,7 +18,7 @@ from sqlalchemy.exc import IntegrityError
 from telegram.error import Forbidden, TelegramError
 from telegram.ext import Application, ContextTypes
 
-from bot.news import crawler, publisher, render as render_mod
+from bot.news import crawler, cta as cta_mod, publisher, render as render_mod
 from core.config import settings
 from core.i18n import t
 from db.engine import async_session_scope
@@ -33,6 +33,15 @@ from db.repositories import pending_intents as intents_repo
 logger = logging.getLogger(__name__)
 
 NEWS_CHANNEL_ID_KEY = "news_channel_id"
+NEWS_AUTOSEND_KEY = "news_autosend"   # "1" → auto-approve a cycle's top items by SCORE
+NEWS_TOP_N_KEY = "news_top_n"         # how many of a cycle's fresh items autosend promotes
+# "1" (default) → auto-approve every fresh item that matches a TRENDING Polymarket
+# event, so bet-relevant headlines publish hands-free regardless of raw score.
+NEWS_AUTOAPPROVE_TRENDING_KEY = "news_autoapprove_trending"
+# "1" (default) → post an anonymous engagement poll (the market question + its
+# outcomes) under each channel card. Sentiment/social-proof only — betting stays on
+# the card buttons.
+NEWS_POLL_KEY = "news_poll"
 
 
 async def crawl_job(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -41,6 +50,7 @@ async def crawl_job(context: ContextTypes.DEFAULT_TYPE) -> None:
         # snapshot the fields we need so we can close this session before network I/O
         targets = [(s.id, s.url, s.kind, s.category_id) for s in sources]
 
+    created: list[tuple[int, str]] = []  # (item_id, title) of this cycle's fresh items
     for source_id, url, kind, category_id in targets:
         try:
             articles = await crawler.fetch_articles(
@@ -63,7 +73,7 @@ async def crawl_job(context: ContextTypes.DEFAULT_TYPE) -> None:
                         if await items_repo.exists_by_url_hash(session, art.url_hash) \
                                 or await items_repo.exists_by_dedup_hash(session, dh):
                             continue
-                        await items_repo.create(
+                        item = await items_repo.create(
                             session, url=art.url, url_hash=art.url_hash,
                             title_orig=art.title or art.url, body_orig=art.body,
                             lang_orig=art.lang, hero_image_url=art.hero_image,
@@ -71,6 +81,7 @@ async def crawl_job(context: ContextTypes.DEFAULT_TYPE) -> None:
                             dedup_hash=dh, score=crawler.score_article(art),
                         )
                         added += 1
+                        created.append((item.id, item.title_orig or ""))
                 except IntegrityError:
                     continue  # concurrent insert of the same url_hash — fine (dedup race)
                 except Exception:  # noqa: BLE001 — isolate a bad item, keep the rest + mark_checked
@@ -79,6 +90,35 @@ async def crawl_job(context: ContextTypes.DEFAULT_TYPE) -> None:
             await sources_repo.mark_checked(session, source_id, f"ok:{added}")
     if targets:
         logger.info("news crawl: polled %d sources", len(targets))
+
+    if not created:
+        return
+
+    # Read the auto-approval policy in a short scope, then do the TRENDING match
+    # OUTSIDE any transaction (it's a network call — never hold a DB connection
+    # across Gamma I/O), then write the approvals.
+    async with async_session_scope() as session:
+        autoapprove_trending = (await appconfig.get(session, NEWS_AUTOAPPROVE_TRENDING_KEY, "1")) != "0"
+        autosend = (await appconfig.get(session, NEWS_AUTOSEND_KEY)) == "1"
+        top_n = int(await appconfig.get_float(session, NEWS_TOP_N_KEY, 5))
+
+    # 1) Bet-relevant auto-approval (the user's ask): every fresh item whose headline
+    #    matches a currently-trending Polymarket event goes straight to render→publish.
+    matched = await cta_mod.trending_matches(created) if autoapprove_trending else set()
+
+    async with async_session_scope() as session:
+        if matched:
+            n = await items_repo.approve_ids(session, list(matched))
+            if n:
+                logger.info("news: auto-approved %d of %d fresh items matching trending markets",
+                            n, len(created))
+        # 2) Score-based autosend (off by default): promote the cycle's top-N by score
+        #    regardless of market match. The bet-relevant gate at publish still applies.
+        if autosend:
+            promoted = await items_repo.auto_approve_ids(session, [c[0] for c in created], top_n)
+            if promoted:
+                logger.info("news autosend: auto-approved %d of %d fresh items by score",
+                            promoted, len(created))
 
 
 async def render_job(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -106,7 +146,8 @@ async def _channel_chat_id(session) -> int | None:
         return None
 
 
-async def _publish_one(bot, item_id: int, *, chat_id: int, lang: str, bot_username: str | None) -> None:
+async def _publish_one(bot, item_id: int, *, chat_id: int, lang: str,
+                       bot_username: str | None, with_poll: bool = False) -> None:
     """Publish one item with at-most-once delivery: CLAIM the (item,chat,lang)
     slot (committed) BEFORE the irreversible send, then finalize. A concurrent or
     crashed run is reconciled, never re-sent — a duplicate channel post is worse
@@ -131,7 +172,8 @@ async def _publish_one(bot, item_id: int, *, chat_id: int, lang: str, bot_userna
             return  # a concurrent claim won the unique constraint
 
     # 2) send OUTSIDE any transaction (no DB connection held across network I/O)
-    msg_id = await publisher.post_item_to_channel(bot, snap, chat_id=chat_id, lang=lang, bot_username=bot_username)
+    msg_id = await publisher.post_item_to_channel(bot, snap, chat_id=chat_id, lang=lang,
+                                                  bot_username=bot_username, with_poll=with_poll)
 
     # 3) finalize
     async with async_session_scope() as session:
@@ -153,7 +195,14 @@ async def publish_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     lang = settings.news_channel_lang
     async with async_session_scope() as session:
         chat_id = await _channel_chat_id(session)
-        ready_ids = [i.id for i in await items_repo.ready_to_publish(session, limit=10)] if chat_id is not None else []
+        ready_ids = []
+        with_poll = False
+        if chat_id is not None:
+            # bet-relevant only (default): withhold items without a matched market
+            require_market = (await appconfig.get(session, "news_require_market", "1")) != "0"
+            with_poll = (await appconfig.get(session, NEWS_POLL_KEY, "1")) != "0"
+            rows = await items_repo.ready_to_publish(session, limit=10, require_market=require_market)
+            ready_ids = [i.id for i in rows]
     if not ready_ids:
         return
     if not await publisher.channel_is_admin(context.bot, chat_id):
@@ -162,7 +211,8 @@ async def publish_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     bot_username = getattr(context.bot, "username", None)
     for item_id in ready_ids:
         try:
-            await _publish_one(context.bot, item_id, chat_id=chat_id, lang=lang, bot_username=bot_username)
+            await _publish_one(context.bot, item_id, chat_id=chat_id, lang=lang,
+                               bot_username=bot_username, with_poll=with_poll)
         except Exception:  # noqa: BLE001 — isolate one bad item, keep publishing the rest
             logger.exception("news publish failed for item %s; left for retry", item_id)
 

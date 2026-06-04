@@ -173,25 +173,42 @@ async def _open_news_item(update: Update, context: ContextTypes.DEFAULT_TYPE, it
 
 
 async def _open_news_bet(update: Update, context: ContextTypes.DEFAULT_TYPE,
-                         item_id: int, outcome: str) -> None:
-    """News-channel Bet CTA target (``nb-<id>-<y|n>``). Connected user → jump
-    straight to the amount picker for the chosen outcome. New user → persist the
-    intended bet, arm resume, and route through the existing connect flow; the bet
-    resumes on the amount picker after onboarding (never auto-placed)."""
+                         item_id: int, index: int, legacy: bool = False) -> None:
+    """News-channel Bet CTA target (``nb-<id>-<index>``). Resolve outcome #index to
+    a (sub)market + side (each dynamic outcome maps to buying one side of one binary
+    market), then: connected user → jump to the amount picker; new user → persist
+    the intended bet, arm resume, and route through connect (never auto-placed).
+
+    ``legacy`` marks a pre-dynamic ``nb-<id>-y|n`` link (y→0, n→1). It is honored
+    ONLY for an item with no stored outcomes (a true binary on cta_market_id). A
+    numeric index out of range, or a legacy y/n link on a now-multi-outcome item,
+    resolves to NO bet (open the item) — never an outcome the post didn't show."""
     from db.models import NewsItem
     user_id = common.db_user_id(context)
     async with async_session_scope() as s:
         item = await s.get(NewsItem, item_id)
-        market_id = item.cta_market_id if item else None
-        question = item.title_orig if item else None
+        outcomes = list(item.cta_outcomes or []) if item else []
+        legacy_market = item.cta_market_id if item else None
+        question = (item.cta_market_question or item.title_orig) if item else None
         acc = await accounts_repo.resolve_account(s, user_id) if user_id else None
+
+    market_id, side = None, "yes"
+    if not legacy and 0 <= index < len(outcomes):
+        o = outcomes[index] or {}
+        market_id, side = o.get("market_id"), (o.get("side") or "yes")
+    elif legacy and not outcomes and legacy_market and index in (0, 1):
+        # genuine old post (no stored outcomes) → y/n on its single binary market
+        market_id, side = legacy_market, ("yes" if index == 0 else "no")
     if not market_id:
-        # no bettable market resolved for this item → open it normally
+        # out-of-range index, or a legacy y/n link on a now-multi-outcome item →
+        # never invent an unoffered bet; just open the item.
         await _open_news_item(update, context, item_id)
         return
+    side_up = "YES" if str(side).upper().startswith("Y") else "NO"
+
     if acc is not None:
         await discover.show_market_for_bet(
-            update, context, market_id, preselect_outcome=outcome, news_item_id=item_id)
+            update, context, market_id, preselect_outcome=side_up, news_item_id=item_id)
         return
 
     # Not connected: stash the intent so it survives onboarding, then send to connect.
@@ -201,7 +218,7 @@ async def _open_news_bet(update: Update, context: ContextTypes.DEFAULT_TYPE,
             async with async_session_scope() as s:
                 intent = await intents_repo.upsert_intent(
                     s, user_id=user_id, news_item_id=item_id, market_id=market_id,
-                    outcome=outcome, question=question, ttl_hours=settings.news_intent_ttl_hours)
+                    outcome=side_up, question=question, ttl_hours=settings.news_intent_ttl_hours)
                 pid = intent.id
         except Exception as exc:  # noqa: BLE001 — never block onboarding on the intent write
             logger.warning("pending intent upsert failed: %s", type(exc).__name__)
@@ -211,22 +228,26 @@ async def _open_news_bet(update: Update, context: ContextTypes.DEFAULT_TYPE,
     kb = InlineKeyboardMarkup([[InlineKeyboardButton(
         common.tr(context, "bot.news.bet_connect_btn"), callback_data="menu:connect")]])
     await common.reply(update, context, "bot.news.bet_connect_prompt", reply_markup=kb,
-                       outcome=outcome, headline=common.md_safe(question or "", 120))
+                       outcome=side_up, headline=common.md_safe(question or "", 120))
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """/start [r-<code> | n-<item_id> | nb-<item_id>-<y|n>] — attribute a referral,
+    """/start [r-<code> | n-<item_id> | nb-<item_id>-<index>] — attribute a referral,
     open a news item's market, pre-select a bet outcome, else show the dashboard."""
     try:
         ref_code = None
         news_item_id = None
-        news_bet = None  # (item_id, "YES"|"NO")
+        news_bet = None  # (item_id, outcome_index, is_legacy_yn)
         for a in (context.args or []):
             al = a.lower()
             if al.startswith("nb-"):
                 parts = a[3:].split("-")
-                if len(parts) == 2 and parts[0].isdigit() and parts[1].lower() in ("y", "n"):
-                    news_bet = (int(parts[0]), "YES" if parts[1].lower() == "y" else "NO")
+                if len(parts) == 2 and parts[0].isdigit():
+                    idx = parts[1].lower()
+                    if idx.isdigit():
+                        news_bet = (int(parts[0]), int(idx), False)
+                    elif idx in ("y", "n"):  # legacy y/n links → outcome 0/1 (binary only)
+                        news_bet = (int(parts[0]), 0 if idx == "y" else 1, True)
             elif al.startswith("r-"):
                 ref_code = a[2:]
             elif al.startswith("n-") and a[2:].isdigit():
@@ -238,7 +259,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 if user:
                     await rewards_repo.attribute_referral(s, user, ref_code)
         if news_bet is not None:
-            await _open_news_bet(update, context, news_bet[0], news_bet[1])
+            await _open_news_bet(update, context, news_bet[0], news_bet[1], legacy=news_bet[2])
             return
         if news_item_id is not None:
             await _open_news_item(update, context, news_item_id)

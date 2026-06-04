@@ -138,15 +138,22 @@ def _normalize_market(m: dict) -> dict | None:
         except (IndexError, ValueError, TypeError):
             return None
 
+    # Don't assume positional order: Gamma binary markets are usually ["Yes","No"]
+    # but some are ["No","Yes"]. Mapping yes_token/yes_price by POSITION would invert
+    # the side (a "Yes" bet buying the NO token). Locate "Yes" by label.
+    labels = [str(o).strip().lower() for o in outcomes]
+    yi = labels.index("yes") if "yes" in labels else 0
+    ni = 1 - yi
+
     return {
         "id": m.get("conditionId") or m.get("id"),
         "question": m.get("question") or m.get("title"),
         "volume": float(m.get("volume24hr") or m.get("volume") or 0),
         "neg_risk": bool(m.get("negRisk")),
-        "yes_token": str(tokens[0]),
-        "no_token": str(tokens[1]),
-        "yes_price": price(0),
-        "no_price": price(1),
+        "yes_token": str(tokens[yi]),
+        "no_token": str(tokens[ni]),
+        "yes_price": price(yi),
+        "no_price": price(ni),
         "image": m.get("image") or m.get("icon"),
     }
 
@@ -208,22 +215,72 @@ def trending_markets(limit: int = 12) -> list[dict]:
 
 
 def search_markets(query: str, limit: int = 20) -> list[dict]:
-    """Normalized binary markets matching a text query (Gamma title_like), so search
-    results are Buy-able through the same funnel as /trending."""
+    """Normalized binary markets matching a text query, in RELEVANCE order, so
+    results are Buy-able through the same funnel as /trending.
+
+    Uses Gamma's ``/public-search`` (which actually ranks by the query). The
+    ``/markets?title_like=`` param is a no-op — it returns the top-volume markets
+    regardless of the query (every search returned "Will Mexico win the World
+    Cup?"), which is why news CTAs and /search matched the wrong market."""
+    ck = f"search:{query}:{limit}"
+    cached = _cache_get(ck)
+    if cached is not None:
+        return cached
     with _client() as c:
-        r = c.get("/markets", params={"title_like": query, "active": "true",
-                                      "closed": "false", "limit": max(limit * 3, 30)})
-        r.raise_for_status()
-        rows = _as_list(r.json())
+        r = c.get("/public-search", params={"q": query, "limit_per_type": max(limit, 20),
+                                            "events_status": "active"})
+        if r.status_code != 200:
+            return []
+        body = r.json()
+    events = body.get("events", []) if isinstance(body, dict) else []
     out: list[dict] = []
     seen: set[str] = set()
-    for m in rows:
-        nm = _normalize_market(m)
-        if nm and nm["id"] and nm["id"] not in seen:
-            seen.add(nm["id"])
-            out.append(nm)
-    out.sort(key=lambda x: x["volume"], reverse=True)
-    return out[:limit]
+    for e in events:                       # events already in relevance order
+        for m in (e.get("markets") or []):
+            nm = _normalize_market(m)
+            if nm and nm["id"] and nm["id"] not in seen:
+                seen.add(nm["id"])
+                nm["event_title"] = e.get("title")
+                out.append(nm)
+    out = out[:limit]
+    _cache_put(ck, out)
+    return out
+
+
+def search_events(query: str, limit: int = 20) -> list[dict]:
+    """Raw matching EVENTS (each with nested binary sub-markets) via /public-search.
+    Used for dynamic-outcome CTAs: a multi-outcome event ("Iowa Governor Winner",
+    "Bitcoin price?") keeps its sub-markets grouped so we can offer the real choices,
+    not a flattened Yes/No."""
+    ck = f"sevents:{query}:{limit}"
+    cached = _cache_get(ck)
+    if cached is not None:
+        return cached
+    with _client() as c:
+        r = c.get("/public-search", params={"q": query, "limit_per_type": max(limit, 20),
+                                            "events_status": "active"})
+        if r.status_code != 200:
+            return []
+        body = r.json()
+    events = (body.get("events", []) if isinstance(body, dict) else [])[:limit]
+    _cache_put(ck, events)
+    return events
+
+
+def trending_events(limit: int = 30) -> list[dict]:
+    """Top EVENTS by 24h volume (each with nested sub-markets) — the events people
+    are actively betting, for matching news to a hot bet at the event level."""
+    ck = f"tevents:{limit}"
+    cached = _cache_get(ck)
+    if cached is not None:
+        return cached
+    with _client() as c:
+        r = c.get("/events", params={"order": "volume24hr", "ascending": "false",
+                                     "closed": "false", "limit": limit})
+        r.raise_for_status()
+        events = _as_list(r.json())
+    _cache_put(ck, events)
+    return events
 
 
 def get_market(condition_id: str) -> dict | None:

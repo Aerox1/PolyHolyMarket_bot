@@ -20,7 +20,7 @@ from db.repositories import news_items as items_repo
 def _item(**kw):
     base = dict(id=7, title_orig="Fed holds rates", body_orig="The Fed kept rates.",
                 url="https://news/x", translations={}, cta_url=None, cta_market_id=None,
-                hero_image_url=None)
+                cta_market_question=None, cta_outcomes=None, hero_image_url=None)
     base.update(kw)
     return SimpleNamespace(**base)
 
@@ -53,6 +53,25 @@ def test_build_caption_falls_back_to_original_then_any_lang():
     assert "تیتر" in publisher.build_caption(it2, lang="en", cap=_CAP)  # any available lang
 
 
+def test_build_caption_drops_summary_that_repeats_title():
+    # feeds/old rows lead the body with the H1 → the title must not appear twice
+    # (the Adam Hamawy bug). Defensive twin of crawler.clean_body for stored rows.
+    it = _item(translations={"en": {
+        "title": "Adam Hamawy wins New Jersey primary",
+        "summary": "Adam Hamawy wins New Jersey primary\nA former Army surgeon won the seat."}})
+    cap = publisher.build_caption(it, lang="en", cap=_CAP)
+    assert cap.count("Adam Hamawy wins New Jersey primary") == 1  # title only, not echoed
+    assert "A former Army surgeon won the seat." in cap
+
+
+def test_build_digest_drops_summary_that_repeats_title():
+    it = _item(id=9, translations={"en": {
+        "title": "Fed holds rates", "summary": "Fed holds rates\nThe central bank paused."}})
+    digest = publisher.build_digest([it], lang="en", header="Today", bot_username="B")
+    assert digest.count("Fed holds rates") == 1
+    assert "The central bank paused." in digest
+
+
 def test_build_caption_truncates_safely_under_cap():
     it = _item(translations={"en": {"title": "T", "summary": "x" * 5000}})
     cap = publisher.build_caption(it, lang="en", cap=publisher._CAPTION_CAP)
@@ -61,20 +80,54 @@ def test_build_caption_truncates_safely_under_cap():
     assert not cap.rstrip().endswith("<")          # never a dangling tag start
 
 
+def test_fit_trims_on_word_boundary():
+    # a budget trim must not stop mid-word — it backs up to the last space + '…'
+    out = publisher._fit("alpha beta gamma delta epsilon", 18)
+    assert out.endswith("…") and "<" not in out
+    assert not out.rstrip("…").endswith("delt")   # no mid-word stub
+    assert out.rstrip("…").split()[-1] in {"alpha", "beta", "gamma"}  # whole words only
+    # fits already → returned escaped, untouched
+    assert publisher._fit("a & b", 999) == "a &amp; b"
+
+
 def test_build_keyboard_bet_vs_open_and_none():
-    # resolved market + known bot → a direct two-button bet CTA (Bet YES / Bet NO),
-    # deep-linking nb-<id>-y / nb-<id>-n (outcome resolved server-side at click).
-    bet = publisher.build_keyboard(_item(cta_market_id="0xabc", cta_url="https://t.me/B?start=n-7"),
-                                   bot_username="B", lang="en")
-    row = bet.inline_keyboard[0]
-    assert [b.url for b in row] == ["https://t.me/B?start=nb-7-y", "https://t.me/B?start=nb-7-n"]
-    assert "YES" in row[0].text and "NO" in row[1].text
-    # no resolved market → the single "Open in bot" link (unchanged)
+    # resolved outcomes + known bot → a button per outcome with odds, deep-linking
+    # nb-<id>-<index> (outcome resolved server-side at click).
+    outs = [{"label": "Yes", "market_id": "0xabc", "side": "yes", "price": 0.6},
+            {"label": "No", "market_id": "0xabc", "side": "no", "price": 0.4}]
+    bet = publisher.build_keyboard(_item(cta_market_id="0xabc", cta_outcomes=outs,
+                                         cta_url="https://t.me/B?start=n-7"), bot_username="B", lang="en")
+    urls = [b.url for row in bet.inline_keyboard for b in row]
+    texts = [b.text for row in bet.inline_keyboard for b in row]
+    assert urls == ["https://t.me/B?start=nb-7-0", "https://t.me/B?start=nb-7-1"]
+    assert "Yes" in texts[0] and "No" in texts[1]
+    # no resolved outcomes → the single "Open in bot" link (unchanged)
     openb = publisher.build_keyboard(_item(cta_market_id=None, cta_url="https://t.me/B?start=n-7"),
                                      bot_username="B", lang="en")
     assert openb.inline_keyboard[0][0].text == "📰 Open in bot"
     # no url + no bot username → no keyboard (None), not an empty markup
     assert publisher.build_keyboard(_item(cta_url=None), bot_username=None, lang="en") is None
+
+
+# ── build_poll (engagement poll mirroring the bet) ─────────────────────────────
+
+def test_build_poll_binary_multi_and_none():
+    yn = [{"label": "Yes", "market_id": "0xM", "side": "yes", "price": 0.4},
+          {"label": "No", "market_id": "0xM", "side": "no", "price": 0.6}]
+    q, opts = publisher.build_poll(_item(cta_market_question="Will X happen?", cta_outcomes=yn))
+    assert q == "Will X happen?" and opts == ["Yes", "No"]
+    # multi-outcome event → the candidate/bucket labels (no odds in the option text)
+    multi = [{"label": "Democrats", "market_id": "0xd"}, {"label": "Republicans", "market_id": "0xr"},
+             {"label": "Other", "market_id": "0xo"}]
+    q, opts = publisher.build_poll(_item(cta_market_question="Who wins?", cta_outcomes=multi))
+    assert opts == ["Democrats", "Republicans", "Other"]
+    # no outcomes → no poll
+    assert publisher.build_poll(_item(cta_outcomes=None)) is None
+    # fewer than 2 distinct options (deduped case-insensitively) → no poll
+    assert publisher.build_poll(_item(cta_market_question="Q", cta_outcomes=[{"label": "Yes"}, {"label": "yes"}])) is None
+    # falls back to the headline when there's no market question
+    q, opts = publisher.build_poll(_item(title_orig="Headline", cta_market_question=None, cta_outcomes=yn))
+    assert q == "Headline"
 
 
 # ── post_item_to_channel (mocked bot) ─────────────────────────────────────────
@@ -100,6 +153,10 @@ class _Bot:
     async def send_message(self, **kw):
         self.calls.append(("text", kw))
         return _Msg(202)
+
+    async def send_poll(self, **kw):
+        self.calls.append(("poll", kw))
+        return _Msg(303)
 
     async def get_me(self):
         return SimpleNamespace(id=1)
@@ -144,13 +201,19 @@ async def test_post_falls_back_to_plain_on_parse_error():
 
 # ── publish_job ───────────────────────────────────────────────────────────────
 
-async def _seed_ready(url_hash="ph1", **kw):
+async def _seed_ready(url_hash="ph1", outcomes=None, **kw):
     async with async_session_scope() as s:
         it = await items_repo.create(s, url="https://n/" + url_hash, url_hash=url_hash,
                                      title_orig="Ready item", **kw)
         it.status = "ready"
         it.translations.update({"en": {"title": "Ready item", "summary": "summary"}})
         it.cta_url = f"https://t.me/TestBot?start=n-{it.id}"
+        # A matched market makes the item publishable under bet-relevant-only (the
+        # default); the question is shown next to the Bet buttons.
+        it.cta_market_id = "0xMKT"
+        it.cta_market_question = "Will this resolve YES?"
+        if outcomes is not None:
+            it.cta_outcomes = outcomes
         return it.id
 
 
@@ -175,6 +238,61 @@ async def test_publish_job_posts_and_marks_sent_and_is_idempotent():
     assert len(bot.calls) == sends_after_first
     async with async_session_scope() as s:
         assert (await s.execute(select(func.count()).select_from(NewsChannelPost))).scalar() == 1
+
+
+async def test_publish_job_posts_engagement_poll_under_card():
+    await _set_channel()
+    outs = [{"label": "Yes", "market_id": "0xMKT", "side": "yes", "price": 0.4},
+            {"label": "No", "market_id": "0xMKT", "side": "no", "price": 0.6}]
+    await _seed_ready(url_hash="poll1", outcomes=outs)
+    bot = _Bot()
+    await news_jobs.publish_job(SimpleNamespace(bot=bot))
+    kinds = [c[0] for c in bot.calls]
+    assert kinds == ["text", "poll"]  # card first, then the poll under it
+    pkw = next(kw for k, kw in bot.calls if k == "poll")
+    assert pkw["question"] == "Will this resolve YES?"
+    assert pkw["options"] == ["Yes", "No"]
+    assert pkw["is_anonymous"] is True and pkw["type"] == "regular"
+
+
+async def test_publish_job_poll_can_be_disabled():
+    await _set_channel()
+    outs = [{"label": "Yes", "market_id": "0xMKT", "side": "yes", "price": 0.4},
+            {"label": "No", "market_id": "0xMKT", "side": "no", "price": 0.6}]
+    await _seed_ready(url_hash="poll2", outcomes=outs)
+    async with async_session_scope() as s:
+        await appconfig.set_(s, news_jobs.NEWS_POLL_KEY, "0")
+    bot = _Bot()
+    await news_jobs.publish_job(SimpleNamespace(bot=bot))
+    assert [c[0] for c in bot.calls] == ["text"]  # card only, no poll
+
+
+async def test_publish_job_no_poll_without_outcomes():
+    # the default _seed_ready has a market question but NO outcomes → no poll
+    await _set_channel()
+    await _seed_ready(url_hash="poll3")
+    bot = _Bot()
+    await news_jobs.publish_job(SimpleNamespace(bot=bot))
+    assert "poll" not in [c[0] for c in bot.calls]
+
+
+async def test_post_item_poll_failure_is_non_fatal():
+    """A poll send error must NOT fail the item — the card msg id is still returned
+    (the card is already posted + claimed; a re-sent card is worse than a lost poll)."""
+    from telegram.error import TelegramError
+
+    class _PollFails(_Bot):
+        async def send_poll(self, **kw):
+            self.calls.append(("poll", kw))
+            raise TelegramError("poll boom")
+
+    bot = _PollFails()
+    outs = [{"label": "Yes", "market_id": "0xM"}, {"label": "No", "market_id": "0xM"}]
+    it = _item(cta_market_question="Q?", cta_outcomes=outs)
+    mid = await publisher.post_item_to_channel(bot, it, chat_id=-100, lang="en",
+                                               bot_username="TestBot", with_poll=True)
+    assert mid == 202  # card succeeded despite the poll failure
+    assert [c[0] for c in bot.calls] == ["text", "poll"]
 
 
 async def test_publish_job_noop_without_channel():

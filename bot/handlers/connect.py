@@ -478,12 +478,16 @@ async def on_disconnect_confirmed(update: Update, context: ContextTypes.DEFAULT_
                 await query.message.reply_text(common.tr(context, "bot.disconnect.none"))
                 return
             await users_repo.set_active_account(session, telegram_id, None)
+            # Record the id in `detail`, NOT the account_id FK column: the account
+            # row is being deleted in this same transaction, so an audit row that
+            # referenced accounts.id would fail the FK on INSERT (with FKs enforced)
+            # and roll back the whole disconnect — leaving the key undeleted.
             await audit.record_async(
                 session,
                 AuditEvent.ACCOUNT_DISCONNECTED,
                 actor_type="user",
                 user_id=user_id,
-                account_id=account_id,
+                detail={"account_id": account_id},
             )
         common.manager(context).invalidate(user_id, account_id)
     except Exception as exc:  # noqa: BLE001

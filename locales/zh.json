@@ -458,6 +458,7 @@
       "channel_lang": "频道语言",
       "top_n": "每次发布条数",
       "autosend": "自动发送已批准内容",
+      "poll": "在每条卡片下方添加互动投票",
       "gemini": "Gemini（文本+图片）",
       "telegram": "Telegram 机器人",
       "channel": "新闻频道",

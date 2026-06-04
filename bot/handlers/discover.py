@@ -428,7 +428,7 @@ async def _place_bet_amount(update: Update, context: ContextTypes.DEFAULT_TYPE, 
             return
         token = fresh.get("yes_token") if side == "yes" else fresh.get("no_token")
         entry_price = fresh.get("yes_price") if side == "yes" else fresh.get("no_price")
-        if not entry_price:
+        if entry_price is None or not token:  # unresolvable price/token → refuse (0.0 is a valid longshot)
             await common.reply(update, context, "bot.news.bet_unavailable", reply_markup=common.with_nav(context))
             return
         title = fresh.get("question") or token

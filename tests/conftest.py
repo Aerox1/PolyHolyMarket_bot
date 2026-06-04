@@ -34,6 +34,30 @@ from db.engine import SessionLocal, create_all  # noqa: E402
 from db.models import Base  # noqa: E402
 from db.engine import engine  # noqa: E402
 
+# Pin the ASYNC engine to a NullPool in tests. asyncio_mode=auto gives every async
+# test its own event loop, but aiosqlite binds each connection's worker thread to
+# the loop that opened it. A pooled connection that survives into a later test (a
+# new loop) — then disposed by the sync _clean_db teardown — makes that thread fire
+# on a now-closed loop ("RuntimeError: Event loop is closed"). NullPool opens+closes
+# a fresh connection per session within its own loop, so nothing crosses loops.
+# Test-only; production keeps the default pool (one long-lived loop, no issue).
+import db.engine as _dbe  # noqa: E402
+from sqlalchemy import event as _event  # noqa: E402
+from sqlalchemy.ext.asyncio import (  # noqa: E402
+    AsyncSession as _AsyncSession,
+    async_sessionmaker as _async_sessionmaker,
+    create_async_engine as _create_async_engine,
+)
+from sqlalchemy.pool import NullPool  # noqa: E402
+
+_dbe._async_engine = _create_async_engine(
+    os.environ["DATABASE_URL_ASYNC"], poolclass=NullPool, future=True
+)
+_event.listen(_dbe._async_engine.sync_engine, "connect", _dbe._sqlite_pragmas)
+_dbe._AsyncSessionLocal = _async_sessionmaker(
+    bind=_dbe._async_engine, expire_on_commit=False, class_=_AsyncSession
+)
+
 
 @pytest.fixture(scope="session", autouse=True)
 def _schema():

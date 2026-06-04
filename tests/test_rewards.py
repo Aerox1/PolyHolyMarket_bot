@@ -62,6 +62,23 @@ async def test_bet_awards_points(sf):
         assert await rw.balance(s, u.id) == pts + rw.DAILY_STREAK_BONUS + rw.POINTS_BET_BASE
 
 
+async def test_streak_bonus_idempotent_per_day(sf):
+    # The partial unique index (user_id, day_bucket) WHERE reason='streak' makes a
+    # repeated same-day streak award a no-op — closing the check-then-insert race
+    # (two concurrent bets) at the DB level, not via an app-side SELECT.
+    from sqlalchemy import func, select
+
+    from db.models import PointsLedger
+    async with sf() as s:
+        u = await _user(s, 1)
+        await rw.reward_for_streak(s, u.id, streak=3)
+        await rw.reward_for_streak(s, u.id, streak=3)  # same UTC day again → dropped by the unique index
+        n = await s.scalar(select(func.count()).select_from(PointsLedger).where(
+            PointsLedger.user_id == u.id, PointsLedger.reason == "streak"))
+        assert n == 1                                  # exactly one streak row
+        assert await rw.balance(s, u.id) == rw.DAILY_STREAK_BONUS * 3
+
+
 async def test_conditional_unlock_pays_both_sides(sf):
     async with sf() as s:
         a = await _user(s, 1, "alice"); b = await _user(s, 2, "bob")

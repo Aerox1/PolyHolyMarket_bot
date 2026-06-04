@@ -67,28 +67,35 @@ def _gamma_market(closed=False, active=True):
 
 # ── deep-link + channel keyboard (Phase A) ─────────────────────────────────────
 
-def test_bet_deeplink_encodes_item_and_outcome():
-    assert news_cta.bet_deeplink("Bot", item_id=42, outcome="YES") == "https://t.me/Bot?start=nb-42-y"
-    assert news_cta.bet_deeplink("Bot", item_id=42, outcome="NO") == "https://t.me/Bot?start=nb-42-n"
+def test_bet_deeplink_encodes_item_and_index():
+    assert news_cta.bet_deeplink("Bot", item_id=42, index=0) == "https://t.me/Bot?start=nb-42-0"
+    assert news_cta.bet_deeplink("Bot", item_id=42, index=1) == "https://t.me/Bot?start=nb-42-1"
     # well under Telegram's 64-char start-payload cap, no conditionId encoded
-    assert len("nb-42-y") < 64 and "0x" not in news_cta.bet_deeplink("Bot", item_id=42, outcome="YES")
+    assert len("nb-42-0") < 64 and "0x" not in news_cta.bet_deeplink("Bot", item_id=42, index=0)
 
 
-def test_build_keyboard_two_bet_buttons_when_market_resolved():
-    item = SimpleNamespace(id=7, cta_market_id="0xCOND", cta_url="https://t.me/Bot?start=n-7")
+def _binary_outcomes():
+    return [{"label": "Yes", "market_id": "0xCOND", "side": "yes", "price": 0.7},
+            {"label": "No", "market_id": "0xCOND", "side": "no", "price": 0.3}]
+
+
+def test_build_keyboard_outcome_buttons_when_resolved():
+    item = SimpleNamespace(id=7, cta_market_id="0xCOND", cta_url="https://t.me/Bot?start=n-7",
+                           cta_outcomes=_binary_outcomes())
     kb = publisher.build_keyboard(item, bot_username="Bot", lang="en")
-    row = kb.inline_keyboard[0]
-    assert [b.url for b in row] == ["https://t.me/Bot?start=nb-7-y", "https://t.me/Bot?start=nb-7-n"]
-    assert "YES" in row[0].text and "NO" in row[1].text
+    urls = [b.url for row in kb.inline_keyboard for b in row]
+    texts = [b.text for row in kb.inline_keyboard for b in row]
+    assert urls == ["https://t.me/Bot?start=nb-7-0", "https://t.me/Bot?start=nb-7-1"]  # index-based
+    assert "Yes" in texts[0] and "No" in texts[1]
 
 
-def test_build_keyboard_single_button_without_market():
-    item = SimpleNamespace(id=7, cta_market_id=None, cta_url="https://t.me/Bot?start=n-7")
+def test_build_keyboard_single_button_without_outcomes():
+    item = SimpleNamespace(id=7, cta_market_id=None, cta_url="https://t.me/Bot?start=n-7", cta_outcomes=None)
     kb = publisher.build_keyboard(item, bot_username="Bot", lang="en")
     assert len(kb.inline_keyboard[0]) == 1
     assert kb.inline_keyboard[0][0].url == "https://t.me/Bot?start=n-7"
     # no link target at all → no keyboard
-    assert publisher.build_keyboard(SimpleNamespace(id=7, cta_market_id=None, cta_url=None),
+    assert publisher.build_keyboard(SimpleNamespace(id=7, cta_market_id=None, cta_url=None, cta_outcomes=None),
                                     bot_username=None, lang="en") is None
 
 
@@ -203,6 +210,23 @@ async def test_intent_upsert_idempotent_per_outcome():
         assert latest.id == c.id  # newest pending wins (last-tap-wins)
 
 
+async def test_intent_distinct_per_candidate_submarket():
+    # multi-outcome candidates all bet side YES — distinct sub-markets must NOT collide
+    # on the idempotency key (else tapping two candidates overwrites one another).
+    uid = await _seed_user(tg_id=558)
+    async with async_session_scope() as s:
+        a = await intents_repo.upsert_intent(s, user_id=uid, news_item_id=None, market_id="0xDEM", outcome="YES")
+        a_id = a.id
+    async with async_session_scope() as s:
+        b = await intents_repo.upsert_intent(s, user_id=uid, news_item_id=None, market_id="0xREP", outcome="YES")
+        assert b.id != a_id  # different candidate sub-market → distinct row
+        # re-tapping the SAME candidate still updates in place (true idempotency)
+        a2 = await intents_repo.upsert_intent(s, user_id=uid, news_item_id=None, market_id="0xDEM", outcome="YES")
+        assert a2.id == a_id
+        latest = await intents_repo.latest_pending(s, uid)
+        assert latest.market_id == "0xREP"  # last distinct tap wins
+
+
 async def test_intent_expire_stale_marks_past_ttl():
     uid = await _seed_user(tg_id=556)
     async with async_session_scope() as s:
@@ -221,19 +245,24 @@ async def test_intent_expire_stale_marks_past_ttl():
 async def test_start_routes_nb_payload_to_open_news_bet(monkeypatch):
     seen = {}
 
-    async def fake_bet(update, context, item_id, outcome):
-        seen["call"] = (item_id, outcome)
+    async def fake_bet(update, context, item_id, index, legacy=False):
+        seen["call"] = (item_id, index, legacy)
 
     async def fake_item(update, context, item_id):
         seen["item"] = item_id
 
     monkeypatch.setattr(start, "_open_news_bet", fake_bet)
     monkeypatch.setattr(start, "_open_news_item", fake_item)
-    await start.start(_update(), SimpleNamespace(args=["nb-5-y"], user_data={"lang": "en"}))
-    assert seen.get("call") == (5, "YES") and "item" not in seen
+    # numeric outcome index (the new dynamic-outcome links) → not legacy
+    await start.start(_update(), SimpleNamespace(args=["nb-5-2"], user_data={"lang": "en"}))
+    assert seen.get("call") == (5, 2, False) and "item" not in seen
+    # legacy y/n links still resolve → outcome 0 / 1, flagged legacy
+    seen.clear()
+    await start.start(_update(), SimpleNamespace(args=["nb-9-y"], user_data={"lang": "en"}))
+    assert seen.get("call") == (9, 0, True)
     seen.clear()
     await start.start(_update(), SimpleNamespace(args=["nb-9-n"], user_data={"lang": "en"}))
-    assert seen.get("call") == (9, "NO")
+    assert seen.get("call") == (9, 1, True)
     # plain n- still opens the item (not the bet funnel)
     seen.clear()
     await start.start(_update(), SimpleNamespace(args=["n-7"], user_data={"lang": "en"}))
@@ -243,7 +272,7 @@ async def test_start_routes_nb_payload_to_open_news_bet(monkeypatch):
 async def test_start_malformed_nb_falls_through_to_dashboard(monkeypatch):
     seen = {}
 
-    async def fake_bet(update, context, item_id, outcome):
+    async def fake_bet(update, context, item_id, index, legacy=False):
         seen["bet"] = True
 
     async def fake_dash(update, context, **kw):
@@ -259,6 +288,9 @@ async def _seed_item(market_id="0xCOND"):
     async with async_session_scope() as s:
         it = await items_repo.create(s, url="u1", url_hash="h1", title_orig="Big Headline")
         it.cta_market_id = market_id
+        it.cta_market_question = "Big Headline market?"
+        it.cta_outcomes = [{"label": "Yes", "market_id": market_id, "side": "yes", "price": 0.7},
+                           {"label": "No", "market_id": market_id, "side": "no", "price": 0.3}]
         return it.id
 
 
@@ -275,7 +307,7 @@ async def test_open_news_bet_connected_jumps_to_picker(monkeypatch):
 
     monkeypatch.setattr(start.discover, "show_market_for_bet", fake_show)
     monkeypatch.setattr(start.accounts_repo, "resolve_account", fake_resolve)
-    await start._open_news_bet(_update(), _ctx(db_user_id=uid), item_id, "NO")
+    await start._open_news_bet(_update(), _ctx(db_user_id=uid), item_id, 1)  # outcome #1 = No
     assert captured["market_id"] == "0xCOND"
     assert captured["preselect_outcome"] == "NO" and captured["news_item_id"] == item_id
 
@@ -290,7 +322,7 @@ async def test_open_news_bet_new_user_persists_intent_and_prompts(monkeypatch):
     monkeypatch.setattr(start.accounts_repo, "resolve_account", fake_resolve)
     msg = _RecMsg()
     ctx = _ctx(db_user_id=uid)
-    await start._open_news_bet(_update(msg=msg), ctx, item_id, "YES")
+    await start._open_news_bet(_update(msg=msg), ctx, item_id, 0)  # outcome #0 = Yes
 
     # intent persisted + resume armed + a prompt shown with the headline + connect button
     assert ctx.user_data.get("news_bet_armed")
@@ -300,6 +332,51 @@ async def test_open_news_bet_new_user_persists_intent_and_prompts(monkeypatch):
     text, kw = msg.sent[0]
     assert "Big Headline" in text
     assert kw["reply_markup"].inline_keyboard[0][0].callback_data == "menu:connect"
+
+
+async def test_open_news_bet_out_of_range_index_opens_item(monkeypatch):
+    # a tampered/stale index beyond the offered outcomes must NOT invent a bet
+    uid = await _seed_user(tg_id=611)
+    item_id = await _seed_item()  # has 2 outcomes
+    called = {}
+
+    async def fake_item(update, context, iid):
+        called["item"] = iid
+
+    async def fake_show(*a, **k):
+        called["bet"] = True
+
+    async def fake_resolve(session, user_id, account_id=None):
+        return SimpleNamespace(id=1)  # connected
+
+    monkeypatch.setattr(start, "_open_news_item", fake_item)
+    monkeypatch.setattr(start.discover, "show_market_for_bet", fake_show)
+    monkeypatch.setattr(start.accounts_repo, "resolve_account", fake_resolve)
+    await start._open_news_bet(_update(), _ctx(db_user_id=uid), item_id, 99)
+    assert called.get("item") == item_id and "bet" not in called  # no invented bet
+
+
+async def test_open_news_bet_legacy_yn_on_multi_opens_item(monkeypatch):
+    # a legacy y/n link arriving on an item that now has dynamic outcomes must NOT
+    # index into them (a 'No' tap could buy YES on the 2nd candidate) — open the item.
+    uid = await _seed_user(tg_id=612)
+    item_id = await _seed_item()  # has cta_outcomes
+    called = {}
+
+    async def fake_item(update, context, iid):
+        called["item"] = iid
+
+    async def fake_show(*a, **k):
+        called["bet"] = True
+
+    async def fake_resolve(session, user_id, account_id=None):
+        return SimpleNamespace(id=1)
+
+    monkeypatch.setattr(start, "_open_news_item", fake_item)
+    monkeypatch.setattr(start.discover, "show_market_for_bet", fake_show)
+    monkeypatch.setattr(start.accounts_repo, "resolve_account", fake_resolve)
+    await start._open_news_bet(_update(), _ctx(db_user_id=uid), item_id, 1, legacy=True)
+    assert called.get("item") == item_id and "bet" not in called
 
 
 # ── show_market_for_bet (Phase B) ──────────────────────────────────────────────
@@ -586,11 +663,14 @@ async def test_wallet_picker_and_account_threading(monkeypatch):
 
 # ── digest two-outcome links ───────────────────────────────────────────────────
 
-def test_build_digest_offers_both_outcomes():
+def test_build_digest_offers_each_outcome():
     it = SimpleNamespace(id=7, title_orig="Head", body_orig="b", url="https://n/x",
                          translations={"en": {"title": "Head", "summary": "s"}},
-                         cta_url="https://t.me/B?start=n-7", cta_market_id="0xC")
+                         cta_url="https://t.me/B?start=n-7", cta_market_id="0xC",
+                         cta_market_question="Q?",
+                         cta_outcomes=[{"label": "Yes", "market_id": "0xC", "side": "yes", "price": 0.7},
+                                       {"label": "No", "market_id": "0xC", "side": "no", "price": 0.3}])
     out = publisher.build_digest([it], lang="en", header="H", bot_username="B")
-    assert "nb-7-y" in out and "nb-7-n" in out          # both sides offered, no YES bias
+    assert "nb-7-0" in out and "nb-7-1" in out          # each outcome offered, by index
     out2 = publisher.build_digest([it], lang="en", header="H")  # no bot_username
     assert "nb-7-" not in out2 and "start=n-7" in out2  # single Trade link, unchanged

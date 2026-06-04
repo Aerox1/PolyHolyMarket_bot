@@ -15,9 +15,14 @@ import secrets
 from datetime import datetime, timezone
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models import PointsLedger, Referral, User, UserStats
+
+
+def _utc_day() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
 # ── tunables (points are free to mint; kept modest + descending) ──────────────
 REFERRAL_LAYER_RATES = [0.10, 0.05, 0.03, 0.02, 0.01]  # L1..L5
@@ -104,16 +109,9 @@ async def reward_for_bet(session: AsyncSession, user_id: int, amount_usd: float)
 
 
 async def _maybe_award_daily_streak(session: AsyncSession, user_id: int) -> None:
-    """Award the streak bonus at most once per UTC day."""
-    start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-    already = await session.scalar(
-        select(PointsLedger.id).where(
-            PointsLedger.user_id == user_id, PointsLedger.reason == "streak",
-            PointsLedger.created_at >= start,
-        ).limit(1)
-    )
-    if already:
-        return
+    """Award the streak bonus at most once per UTC day. Idempotency is enforced by
+    the partial unique index (user_id, day_bucket) WHERE reason='streak' inside
+    ``reward_for_streak`` — no check-then-insert race."""
     stats = await session.get(UserStats, user_id)
     await reward_for_streak(session, user_id, stats.current_streak if stats else 1)
 
@@ -124,8 +122,19 @@ async def reward_for_win(session: AsyncSession, user_id: int) -> None:
 
 
 async def reward_for_streak(session: AsyncSession, user_id: int, streak: int) -> None:
+    """Award the daily streak bonus, at most once per UTC day. Race-safe: the insert
+    is guarded by the partial unique index on (user_id, day_bucket) WHERE
+    reason='streak'; a duplicate same-day insert (concurrent bet) hits IntegrityError
+    and is swallowed inside a savepoint, so the enclosing transaction survives."""
     bonus = DAILY_STREAK_BONUS * min(max(streak, 0), DAILY_STREAK_CAP)
-    await award(session, user_id, bonus, "streak")
+    if bonus <= 0:
+        return
+    try:
+        async with session.begin_nested():  # SAVEPOINT: isolate the dup so the outer tx survives
+            session.add(PointsLedger(user_id=user_id, delta=bonus, reason="streak", day_bucket=_utc_day()))
+            await session.flush()
+    except IntegrityError:
+        pass  # already awarded today (unique index) — idempotent no-op
 
 
 async def _maybe_unlock(session: AsyncSession, user_id: int) -> None:

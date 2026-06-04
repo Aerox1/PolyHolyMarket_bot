@@ -35,4 +35,5 @@ python-dotenv>=1.2
 # ── Dev / test ───────────────────────────────────────────
 pytest>=8
 pytest-asyncio>=0.24
+pytest-cov>=5              # coverage reporting (pytest --cov)
 aiosqlite>=0.20            # async SQLite driver for tests

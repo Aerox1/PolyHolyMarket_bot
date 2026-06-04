@@ -458,6 +458,7 @@
       "channel_lang": "Channel language",
       "top_n": "Items per publish",
       "autosend": "Auto-send approved items",
+      "poll": "Post an engagement poll under each card",
       "gemini": "Gemini (text + image)",
       "telegram": "Telegram bot",
       "channel": "News channel",

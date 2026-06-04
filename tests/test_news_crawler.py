@@ -37,6 +37,30 @@ def test_score_article_bounds():
     assert 0.0 <= crawler.score_article(rich) <= 1.0
 
 
+# ── clean_body (de-duplicate the headline, drop datelines) ─────────────────────
+
+def test_clean_body_strips_leading_title_and_dateline():
+    # the real Adam Hamawy bug: title echoed as the first body line + a trailing
+    # 'Published On' dateline → both removed, the real summary kept.
+    title = "Pro-Palestine US army veteran Adam Hamawy wins New Jersey primary"
+    body = (f"{title}\n{title}\n"
+            "A former US Army combat surgeon who volunteered at a Gaza hospital won.\n"
+            "Published On 3 Jun 2026")
+    cleaned = crawler.clean_body(title, body)
+    assert cleaned == "A former US Army combat surgeon who volunteered at a Gaza hospital won."
+
+
+def test_clean_body_is_conservative():
+    # a body that does NOT lead with the title is left untouched
+    assert crawler.clean_body("Headline", "Real content here.") == "Real content here."
+    # case/whitespace-insensitive title match, but only exact (normalized) lines go
+    assert crawler.clean_body("Big News", "  big   news  \nThe details.") == "The details."
+    assert crawler.clean_body("Big News", "Big News Today\nMore.") == "Big News Today\nMore."
+    # empty / None safe
+    assert crawler.clean_body("t", "") == ""
+    assert crawler.clean_body("t", None) == ""
+
+
 # ── SSRF guard ───────────────────────────────────────────────────────────────
 
 @pytest.mark.parametrize("bad", [

@@ -63,6 +63,35 @@ def dedup_hash(title: str) -> str:
     return hashlib.sha256(norm.encode("utf-8")).hexdigest()
 
 
+_DATELINE_RE = re.compile(r"^\s*(published|updated)\s+on\b.*$", re.IGNORECASE)
+
+
+def _norm_line(s: str) -> str:
+    return re.sub(r"\s+", " ", (s or "").strip().lower())
+
+
+def clean_body(title: str, body: str) -> str:
+    """Strip feed boilerplate so the stored summary doesn't repeat the headline.
+
+    Many RSS feeds / trafilatura extractions lead the body with the article's own
+    H1 (an exact duplicate of the title) and trail it with a 'Published On <date>'
+    dateline — both render as noise under the bold title (see the Adam Hamawy
+    item). Drops leading blank/title-duplicate lines and any dateline; otherwise
+    leaves the body untouched. Conservative: only removes lines that EXACTLY match
+    the title (normalized) so real content is never trimmed."""
+    if not body:
+        return body or ""
+    nt = _norm_line(title)
+    lines = body.splitlines()
+    # drop leading blank lines and lines that just repeat the headline
+    while lines and (_norm_line(lines[0]) == "" or (nt and _norm_line(lines[0]) == nt)):
+        lines.pop(0)
+    # drop trailing blank lines and datelines ('Published On 3 Jun 2026')
+    while lines and (_norm_line(lines[-1]) == "" or _DATELINE_RE.match(lines[-1])):
+        lines.pop()
+    return "\n".join(lines).strip()
+
+
 def score_article(article: FetchedArticle) -> float:
     """Cheap heuristic in [0, 1] — no LLM. Longer body + a hero image rank higher."""
     score = 0.5
@@ -240,9 +269,11 @@ async def fetch_articles(url: str, kind: str = "auto", limit: int = 10) -> list[
                 or entry.get("summary", "")
             if _looks_like_challenge_page(text):
                 continue
+            title = (entry.get("title") or "")[:512]
             items.append(FetchedArticle(
-                url=link, url_hash=url_hash(link), title=(entry.get("title") or "")[:512],
-                body=text or "", lang=entry.get("language") or feed_lang, hero_image=_hero_from_html(art_body),
+                url=link, url_hash=url_hash(link), title=title,
+                body=clean_body(title, text or ""), lang=entry.get("language") or feed_lang,
+                hero_image=_hero_from_html(art_body),
             ))
         return items
 
@@ -250,8 +281,9 @@ async def fetch_articles(url: str, kind: str = "auto", limit: int = 10) -> list[
     text = trafilatura.extract(body, include_links=False, include_images=False)
     if not text or _looks_like_challenge_page(text):
         return []
+    title = _title_from_html(body)
     items.append(FetchedArticle(
-        url=url, url_hash=url_hash(url), title=_title_from_html(body),
-        body=text, lang=None, hero_image=_hero_from_html(body),
+        url=url, url_hash=url_hash(url), title=title,
+        body=clean_body(title, text), lang=None, hero_image=_hero_from_html(body),
     ))
     return items

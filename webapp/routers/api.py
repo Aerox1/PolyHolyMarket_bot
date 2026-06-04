@@ -182,6 +182,10 @@ async def place_bet(
         logger.warning("miniapp bet failed: %s", type(exc).__name__)
         await audit.record_async(db, AuditEvent.ORDER_ERROR, actor_type="user", user_id=user.id,
                                  account_id=account_id, detail={"error": type(exc).__name__})
+        # Persist the failure audit trail before raising: get_db rolls back the
+        # session on ANY exception leaving the request (incl. HTTPException), which
+        # would otherwise silently discard these rows.
+        await db.commit()
         raise HTTPException(status_code=502, detail="order_failed")
 
     ok = not (isinstance(result, dict) and (result.get("success") is False or result.get("error") or result.get("errorMsg")))
@@ -194,6 +198,8 @@ async def place_bet(
                                     status=("open" if ok else "rejected"), clob_order_id=order_id,
                                     title=m.get("question"), error=None if ok else "rejected")
     if not ok:
+        # Persist the rejected-order + audit rows before raising (see note above).
+        await db.commit()
         raise HTTPException(status_code=502, detail="order_rejected")
     # Gamification: count the bet toward streak + totals, and record a settleable bet.
     try:

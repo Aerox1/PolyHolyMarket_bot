@@ -7,11 +7,18 @@ and totals stay consistent across both surfaces.
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models import User, UserStats
+
+
+def _dec(v) -> Decimal:
+    """Coerce a money value to Decimal for exact accumulation (NUMERIC columns).
+    Goes via str so a float arg can't carry binary-float drift into the sum."""
+    return v if isinstance(v, Decimal) else Decimal(str(v or 0))
 
 METRICS = {
     "bets": UserStats.total_bets,
@@ -32,7 +39,10 @@ def _yesterday() -> str:
 async def record_bet(session: AsyncSession, user_id: int, amount_usd: float) -> UserStats:
     """Update streak + totals for a successful bet. Idempotent within a day for
     the streak (multiple bets the same day keep the streak, bump totals)."""
-    stats = await session.get(UserStats, user_id)
+    # FOR UPDATE locks the row so concurrent bets (bot + Mini App) serialize their
+    # read-modify-write instead of clobbering each other's counters. No-op on SQLite
+    # (dialect omits the clause), a real row lock on Postgres.
+    stats = await session.get(UserStats, user_id, with_for_update=True)
     if stats is None:
         stats = UserStats(user_id=user_id, current_streak=0, longest_streak=0)
         session.add(stats)
@@ -47,7 +57,7 @@ async def record_bet(session: AsyncSession, user_id: int, amount_usd: float) -> 
     stats.longest_streak = max(stats.longest_streak or 0, stats.current_streak)
     stats.last_active_date = today
     stats.total_bets = (stats.total_bets or 0) + 1
-    stats.total_volume_usd = float(stats.total_volume_usd or 0) + max(0.0, amount_usd)
+    stats.total_volume_usd = _dec(stats.total_volume_usd) + _dec(max(0.0, amount_usd))
     await session.flush()
     return stats
 
@@ -56,7 +66,7 @@ async def record_settlement(session: AsyncSession, user_id: int, *, status: str,
                             pnl: float, brier: float | None) -> None:
     """Fold a settled bet into the user's lifetime stats. VOID bets don't count
     toward wins/losses/accuracy (only OPEN→WON/LOST do)."""
-    stats = await session.get(UserStats, user_id)
+    stats = await session.get(UserStats, user_id, with_for_update=True)  # lock for the RMW
     if stats is None:
         stats = UserStats(user_id=user_id)
         session.add(stats)
@@ -67,9 +77,9 @@ async def record_settlement(session: AsyncSession, user_id: int, *, status: str,
         stats.losses = (stats.losses or 0) + 1
     if status in ("WON", "LOST"):
         stats.settled_bets = (stats.settled_bets or 0) + 1
-        stats.realized_pnl_usd = float(stats.realized_pnl_usd or 0) + float(pnl or 0)
+        stats.realized_pnl_usd = _dec(stats.realized_pnl_usd) + _dec(pnl)
         if brier is not None:
-            stats.brier_sum = float(stats.brier_sum or 0) + float(brier)
+            stats.brier_sum = _dec(stats.brier_sum) + _dec(brier)
 
 
 def _accuracy(stats: UserStats) -> dict:
