@@ -62,12 +62,41 @@ def _relevance(title: str, question: str | None) -> int:
 
 # ── dynamic-outcome CTA (event-aware) ────────────────────────────────────────────
 
+def _candidate_name_tokens(event: dict) -> set[str]:
+    """Significant tokens that exist ONLY because a sub-market is labelled with a
+    candidate name (``groupItemTitle``) — e.g. {mark, cuban} for the "Mark Cuban"
+    sub-market of a nominee event. A headline overlapping an event solely on these
+    is an entity collision (the person is merely named in a market), not topical
+    relevance about the story."""
+    names: set[str] = set()
+    for m in (event.get("markets") or []):
+        names |= _significant_tokens(m.get("groupItemTitle") or "")
+    return names
+
+
 def _event_relevance(title: str, event: dict) -> int:
     """Best keyword overlap between the headline and the event title OR any of its
-    sub-market questions (so "Iowa Governor Winner" matches via "...Iowa...race")."""
-    best = _relevance(title, event.get("title"))
+    sub-market questions (so "Iowa Governor Winner" matches via "...Iowa...race").
+
+    Entity-collision guard: if the ONLY overlap is a sub-market's candidate name —
+    no event-title hit and no shared *topical* (non-name) token — score 0. Without
+    it, a story that merely NAMES a person who happens to have a candidacy market
+    (e.g. "Mark Cuban sells his Bitcoin" → the "2028 Democratic Nominee" event, via
+    its "Mark Cuban" sub-market) clears the gate. Both ``resolve_cta`` and the
+    crawl-time ``trending_matches`` auto-approver call this, so both inherit the fix."""
+    htoks = _significant_tokens(title)
+    title_overlap = htoks & _significant_tokens(event.get("title"))
+    name_tokens = _candidate_name_tokens(event)
+    sub_overlap: set[str] = set()
+    best = len(title_overlap)
     for m in (event.get("markets") or []):
-        best = max(best, _relevance(title, m.get("question")))
+        q_shared = htoks & _significant_tokens(m.get("question"))
+        sub_overlap |= q_shared
+        best = max(best, len(q_shared))
+    # No event-title hit AND every shared sub-market token is just a candidate name
+    # → entity collision, not about this story.
+    if not title_overlap and not (sub_overlap - name_tokens):
+        return 0
     return best
 
 

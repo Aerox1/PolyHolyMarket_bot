@@ -653,3 +653,25 @@ class NewsChannelPost(Base):
     posted_at: Mapped[datetime] = _now()
 
     __table_args__ = (UniqueConstraint("news_item_id", "chat_id", "lang", name="uq_news_channel_post"),)
+
+
+class NewsPollVote(Base):
+    """One inline-poll vote on a channel news card. Sentiment/social-proof only —
+    the real bet stays on the card's deep-link buttons; a poll vote never places an
+    order. Keyed by ``(news_item_id, tg_user_id)`` so a Telegram account votes at
+    most once per item; tapping a different option UPDATES the row (re-vote), and
+    the card's keyboard is re-rendered with the live tally. Stored by raw Telegram
+    user id (not ``users.id``) so a channel subscriber who never started the bot can
+    still vote, and the tally stays anonymous in aggregate."""
+
+    __tablename__ = "news_poll_votes"
+
+    news_item_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("news_items.id", ondelete="CASCADE"), primary_key=True)
+    tg_user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)  # voter's Telegram id
+    outcome_index: Mapped[int] = mapped_column(SmallInteger, nullable=False)  # index into cta_outcomes
+    created_at: Mapped[datetime] = _now()
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    __table_args__ = (Index("ix_news_poll_votes_item", "news_item_id"),)

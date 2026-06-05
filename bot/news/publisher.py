@@ -17,7 +17,7 @@ import logging
 import re
 from types import SimpleNamespace
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyParameters
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import BadRequest, TelegramError
 
 from bot.news import cta as cta_mod
@@ -29,10 +29,6 @@ _CAPTION_CAP = 1024   # Telegram photo-caption limit
 _TEXT_CAP = 4096      # Telegram message limit
 _TITLE_MAX = 220      # hard plaintext cap on the title
 _TAG_RE = re.compile(r"<[^>]+>")
-
-_POLL_QUESTION_MAX = 300   # Telegram poll question limit
-_POLL_OPTION_MAX = 100     # Telegram poll option limit
-_POLL_MAX_OPTIONS = 10     # Telegram poll max options
 
 
 def _esc(s: str | None) -> str:
