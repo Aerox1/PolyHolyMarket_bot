@@ -142,6 +142,11 @@ class Settings(BaseSettings):
     news_realtime_max: int = Field(3, alias="NEWS_REALTIME_MAX")
     # Optional logo composited onto rendered news cards (relative to repo root).
     news_logo_path: str = Field("", alias="NEWS_LOGO_PATH")
+    # Sentiment-poll "spice" dial (channel polls only). 0 = neutral Yes/No;
+    # 1 = playful, translation-safe house pair ("HELL YEAH"/"HELL NO"); 2 = spicy
+    # EN-only flagship ("Hell Yeah!"/"Fuck No!"). Sensitive news always forces 0,
+    # and the REAL bet buttons are never affected — only the vibe-check poll.
+    news_poll_spice: int = Field(1, alias="NEWS_POLL_SPICE")
     # "Bet on this" channel CTA: max upward price tolerance for a news-originated
     # market BUY (placed as a FOK limit at entry*(1+slippage), capped at 0.99) so a
     # tap from a public channel can't fill at an arbitrarily worse price.

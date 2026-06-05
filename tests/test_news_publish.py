@@ -142,6 +142,61 @@ def test_build_keyboard_inline_poll_buttons_and_tallies():
     assert [b.callback_data for b in _votes(kb3)] == ["nv:9:0", "nv:9:1", "nv:9:2"]
 
 
+# ── poll "spice" voice (funny vibe-check labels; bet buttons stay clean) ────────
+
+_BIN = [{"label": "Yes", "market_id": "0xM", "side": "yes", "price": 0.6},
+        {"label": "No", "market_id": "0xM", "side": "no", "price": 0.4}]
+
+
+def _bet_texts(kb):
+    return [b.text for row in kb.inline_keyboard for b in row if b.url and b.text.startswith(("✅", "❌", "📈"))]
+
+
+def test_poll_spice_remaps_binary_pair_but_keeps_index_and_bet_buttons():
+    it = _item(id=7, cta_market_id="0xM", cta_outcomes=_BIN, cta_url="https://t.me/B?start=n-7")
+    # spice 1 → translation-safe house pair
+    kb1 = publisher.build_keyboard(it, bot_username="B", lang="en", with_poll=True, poll_spice=1)
+    assert [b.text for b in _votes(kb1)] == ["🗳 HELL YEAH", "🗳 HELL NO"]
+    # spice 2 → spicy flagship
+    kb2 = publisher.build_keyboard(it, bot_username="B", lang="en", with_poll=True, poll_spice=2)
+    assert [b.text for b in _votes(kb2)] == ["🗳 Hell Yeah!", "🗳 Fuck No!"]
+    # vote attribution unchanged (still index-keyed) and the REAL bet buttons untouched
+    assert [b.callback_data for b in _votes(kb2)] == ["nv:7:0", "nv:7:1"]
+    bets = _bet_texts(kb2)
+    assert bets[0].startswith("✅ Bet Yes") and bets[1].startswith("❌ Bet No")
+
+
+def test_poll_spice_respects_yes_no_order():
+    rev = [{"label": "No", "price": 0.4}, {"label": "Yes", "price": 0.6}]  # No first
+    it = _item(id=8, cta_market_id="0xM", cta_outcomes=rev)
+    kb = publisher.build_keyboard(it, bot_username="B", lang="en", with_poll=True, poll_spice=2)
+    # the "Yes" side (index 1) must get the yes-label, not positional
+    assert [b.text for b in _votes(kb)] == ["🗳 Fuck No!", "🗳 Hell Yeah!"]
+
+
+def test_poll_spice_leaves_multi_outcome_labels_real():
+    multi = [{"label": "Dems"}, {"label": "Reps"}, {"label": "Other"}]
+    it = _item(id=9, cta_market_id="0xM", cta_outcomes=multi)
+    kb = publisher.build_keyboard(it, bot_username="B", lang="en", with_poll=True, poll_spice=2)
+    assert [b.text for b in _votes(kb)] == ["🗳 Dems", "🗳 Reps", "🗳 Other"]
+
+
+def test_poll_spice_sensitive_headline_forces_neutral():
+    it = _item(id=10, title_orig="Missile attack kills dozens as war escalates",
+               cta_market_id="0xM", cta_outcomes=_BIN)
+    kb = publisher.build_keyboard(it, bot_username="B", lang="en", with_poll=True, poll_spice=2)
+    assert [b.text for b in _votes(kb)] == ["🗳 Yes", "🗳 No"]  # kill-switch → neutral
+
+
+def test_poll_spice_zero_and_non_english_stay_neutral():
+    it = _item(id=11, cta_market_id="0xM", cta_outcomes=_BIN)
+    assert [b.text for b in _votes(publisher.build_keyboard(
+        it, bot_username="B", lang="en", with_poll=True, poll_spice=0))] == ["🗳 Yes", "🗳 No"]
+    # never ship English profanity to a non-EN channel
+    assert [b.text for b in _votes(publisher.build_keyboard(
+        it, bot_username="B", lang="fa", with_poll=True, poll_spice=2))] == ["🗳 Yes", "🗳 No"]
+
+
 # ── post_item_to_channel (mocked bot) ─────────────────────────────────────────
 
 class _Msg:

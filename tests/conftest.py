@@ -34,6 +34,9 @@ os.environ["GEMINI_API_KEY"] = ""
 # The dedicated tests/test_claude_text.py exercises the Claude path with the SDK
 # call mocked.
 os.environ["NEWS_TEXT_PROVIDER"] = "gemini"
+# Default the poll "spice" OFF for the suite so existing poll tests see neutral
+# Yes/No; the dedicated poll-voice tests pass poll_spice explicitly.
+os.environ["NEWS_POLL_SPICE"] = "0"
 os.environ["CLAUDE_CLI_PATH"] = ""
 os.environ["TELEGRAM_BOT_TOKEN"] = "test-token"
 # Disable SQLite WAL in tests: WAL gives the sync + async engines divergent read
