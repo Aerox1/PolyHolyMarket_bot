@@ -96,7 +96,9 @@ async def _query(prompt: str) -> tuple[str | None, float]:
                     cost = float(getattr(msg, "total_cost_usd", 0) or 0)
                     if getattr(msg, "is_error", False):
                         logger.info("Claude text returned is_error=True")
-                    break  # final message — stop even if the CLI never closes the stream
+                    # Let the generator finish naturally (don't break) — an early break
+                    # leaves it partially consumed and races its aclose across back-to-
+                    # back queries. asyncio.timeout above bounds a CLI that never ends.
     except Exception as exc:  # noqa: BLE001 — never fail the render on a CLI hiccup/timeout
         logger.warning("Claude text failed: %s", type(exc).__name__)
         return None, 0.0
