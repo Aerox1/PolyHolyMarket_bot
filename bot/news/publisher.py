@@ -21,6 +21,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import BadRequest, TelegramError
 
 from bot.news import cta as cta_mod
+from bot.news.sensitivity import is_sensitive
 from core.config import settings
 from core.i18n import t
 
@@ -182,21 +183,6 @@ def build_digest(items, *, lang: str, header: str, bot_username: str | None = No
     return "\n\n".join(blocks)
 
 
-# Headlines where the playful poll voice must switch OFF (war/death/disaster/etc.).
-# Conservative keyword gate — an LLM/category flag would be a better upgrade later.
-_SENSITIVE_RE = re.compile(
-    r"\b(war|wars|killed|kill|dead|death|deaths|attack|attacks|bomb|bombed|bombing|"
-    r"shooting|terror|terrorist|hostage|hostages|casualt(?:y|ies)|massacre|genocide|"
-    r"earthquake|flood|wildfire|airstrike|missile|wounded|injured|funeral|murder|"
-    r"invasion|famine|outbreak|crash|quake)\b",
-    re.IGNORECASE,
-)
-
-
-def _is_sensitive(title: str | None) -> bool:
-    return bool(title and _SENSITIVE_RE.search(title))
-
-
 def _house_pair(lang: str, spice: int) -> tuple[str, str] | None:
     """The funny (yes, no) poll-button pair for a binary market, or None to keep the
     neutral Yes/No. EN-only: polls are channel-only and the channel is English, so we
@@ -214,7 +200,7 @@ def poll_labels(item, outcomes: list[dict], *, lang: str, spice: int) -> list[st
     outcome markets keep their real candidate/bucket labels; sensitive items and
     spice<=0 stay neutral. Vote attribution is unaffected — it is keyed by INDEX."""
     real = [(o.get("label") or "?").strip() for o in outcomes]
-    if spice <= 0 or _is_sensitive(getattr(item, "title_orig", None)):
+    if spice <= 0 or is_sensitive(getattr(item, "title_orig", None)):
         return real
     pair = _house_pair(lang, spice)
     if pair and len(real) == 2 and {real[0].lower(), real[1].lower()} == {"yes", "no"}:

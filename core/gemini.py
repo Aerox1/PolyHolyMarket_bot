@@ -256,11 +256,15 @@ async def generate_text(
 
 def _build_translate_prompt(title: str, body: str, target_langs, tone_prompt: str) -> str:
     langs = ", ".join(target_langs)
-    tone = f"\nEditorial tone/style to apply: {tone_prompt.strip()}" if tone_prompt.strip() else ""
+    has_tone = bool(tone_prompt.strip())
+    tone = f"\nEditorial tone/style to apply: {tone_prompt.strip()}" if has_tone else ""
+    # With a tone set, don't also demand a "neutral" summary (the two fight); the tone
+    # block governs register. Factual accuracy is enforced separately below.
+    summary_style = "" if has_tone else "neutral "
     return (
         "You are a financial-news editor. Translate AND summarize the article below into EACH of these "
         f"language codes: {langs}.{tone}\n"
-        "For every language produce a concise headline-style title and a 2–3 sentence neutral summary in "
+        f"For every language produce a concise headline-style title and a 2–3 sentence {summary_style}summary in "
         "THAT language. Do not add facts that are not in the source. Do not include markdown, links, or "
         "emojis.\n"
         "Return ONLY a JSON object mapping each language code to an object with keys \"title\" and "

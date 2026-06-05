@@ -15,9 +15,12 @@ from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.news import cta as cta_mod
+from bot.news import voice as voice_mod
+from bot.news.sensitivity import is_sensitive
 from core import gemini
 from core.config import SUPPORTED_LANGUAGES
 from db.models import Category, NewsItem
+from db.repositories import appconfig
 
 logger = logging.getLogger(__name__)
 
@@ -65,9 +68,13 @@ async def render_item(
     # spend occurred → a re-charge on retry. Acceptable for Phase 2; revisit by
     # committing usage in its own scope if it ever bites.
     item.status = "translating"
+    # Apply the editorial VOICE (admin-editable), but DROP it for sensitive stories so
+    # the funny tone never lands on a tragedy — neutral wire copy there instead.
+    tone = "" if is_sensitive(item.title_orig) else await appconfig.get(
+        session, voice_mod.NEWS_TONE_PROMPT_KEY, voice_mod.DEFAULT_TONE_PROMPT)
     translated = await gemini.translate_summarize_news(
         session, title=item.title_orig, body=(item.body_orig or "")[:_LLM_BODY_CAP],
-        target_langs=target_langs,
+        target_langs=target_langs, tone_prompt=tone,
     )
     if translated:
         item.translations.update(translated)  # MutableDict — tracked + persisted
