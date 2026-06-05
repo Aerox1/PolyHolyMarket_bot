@@ -101,15 +101,27 @@ def test_build_keyboard_bet_vs_open_and_none():
     texts = [b.text for row in bet.inline_keyboard for b in row]
     assert all(len(row) == 1 for row in bet.inline_keyboard)  # stacked: one button per row
     assert urls == ["https://t.me/B?start=nb-7-0", "https://t.me/B?start=nb-7-1"]
-    # action-first CTA: "✅ Bet Yes · 60%" / "❌ Bet No · 40%"
-    assert texts[0].startswith("✅ Bet Yes") and "60%" in texts[0]
-    assert texts[1].startswith("❌ Bet No") and "40%" in texts[1]
+    # action-first CTA with the fixed-$5 potential payout (stake / slippage-capped
+    # price): Yes 0.6 → 5/(0.6*1.05)=$7.94 ; No 0.4 → 5/(0.4*1.05)=$11.90
+    assert texts[0].startswith("✅ Bet $5 on Yes") and "→ $7.94" in texts[0]
+    assert texts[1].startswith("❌ Bet $5 on No") and "→ $11.90" in texts[1]
     # no resolved outcomes → the single "Open in bot" link (unchanged)
     openb = publisher.build_keyboard(_item(cta_market_id=None, cta_url="https://t.me/B?start=n-7"),
                                      bot_username="B", lang="en")
     assert openb.inline_keyboard[0][0].text == "📰 Open in bot"
     # no url + no bot username → no keyboard (None), not an empty markup
     assert publisher.build_keyboard(_item(cta_url=None), bot_username=None, lang="en") is None
+
+
+def test_outcome_button_shows_fixed_stake_potential():
+    # $5 stake, 5% slippage → potential = 5 / clamp(price * 1.05). Conditional, never
+    # a guarantee — the button just shows what $5 RETURNS if that outcome resolves.
+    o = publisher._outcome_text
+    assert o({"label": "Yes", "price": 0.64}).startswith("✅ Bet $5 on Yes → $7.")
+    assert o({"label": "No", "price": 0.36}).startswith("❌ Bet $5 on No → $13.")
+    assert o({"label": "No", "price": 0.01}).endswith("→ $476")        # $5→~$500 only on a 1% longshot
+    assert o({"label": "Brazil", "price": 0.31}).startswith("📈 Bet $5 on Brazil → $")
+    assert o({"label": "Yes"}) == "✅ Bet $5 on Yes"                    # no price → no payout suffix
 
 
 # ── post_item_to_channel (mocked bot) ─────────────────────────────────────────

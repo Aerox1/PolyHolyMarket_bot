@@ -249,7 +249,8 @@ def test_caption_and_digest_show_dynamic_outcomes():
     assert "Will X happen by July?" in dig and "nb-7-0" in dig and "nb-7-1" in dig
     kb = publisher.build_keyboard(snap, bot_username="B", lang="en")
     texts = [b.text for row in kb.inline_keyboard for b in row]
-    assert any("12%" in t for t in texts) and any("88%" in t for t in texts)
+    # buttons now show the fixed-$5 potential payout per outcome
+    assert any("Bet $5 on Yes →" in t for t in texts) and any("Bet $5 on No →" in t for t in texts)
 
 
 def test_caption_and_digest_multi_outcome_buttons():
@@ -264,8 +265,8 @@ def test_caption_and_digest_multi_outcome_buttons():
     kb = publisher.build_keyboard(snap, bot_username="B", lang="en")
     texts = [b.text for row in kb.inline_keyboard for b in row]
     urls = [b.url for row in kb.inline_keyboard for b in row]
-    assert any("Democrats" in t and "62%" in t for t in texts)
-    assert any("Republicans" in t and "36%" in t for t in texts)
+    assert any("Bet $5 on Democrats →" in t for t in texts)
+    assert any("Bet $5 on Republicans →" in t for t in texts)
     assert "https://t.me/B?start=nb-9-0" in urls and "https://t.me/B?start=nb-9-1" in urls
 
 

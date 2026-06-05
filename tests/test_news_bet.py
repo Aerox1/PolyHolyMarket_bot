@@ -681,18 +681,18 @@ async def test_wallet_picker_and_account_threading(monkeypatch):
     datas = [b.callback_data for row in kb.inline_keyboard for b in row if b.callback_data]
     assert any(d.startswith("betacct:") for d in datas)  # wallet picker, not amounts
 
-    gen = ctx.user_data[discover._NEWS_BET]["gen"]
-    await discover.on_bet_account(_update(query=_Query(f"betacct:{gen}:2")), ctx)
-    assert ctx.user_data[discover._NEWS_BET]["account_id"] == 2
-
     captured = {}
 
     async def fake_request(u, c, i, k, **kw):
         captured["intent"] = i
 
     monkeypatch.setattr(discover.confirm, "request", fake_request)
-    await discover._place_bet_amount(_update(msg=_RecMsg()), ctx, gen=gen, idx="0", side="yes", amount=25.0)
-    assert captured["intent"].get("account_id") == 2  # chosen wallet threaded into the order
+    gen = ctx.user_data[discover._NEWS_BET]["gen"]
+    await discover.on_bet_account(_update(query=_Query(f"betacct:{gen}:2")), ctx)
+    assert ctx.user_data[discover._NEWS_BET]["account_id"] == 2
+    # picking a wallet one-taps the fixed $5 → confirm armed with that wallet + $5
+    assert captured["intent"].get("account_id") == 2
+    assert captured["intent"].get("amount") == 5.0
 
 
 # ── digest two-outcome links ───────────────────────────────────────────────────

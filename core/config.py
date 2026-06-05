@@ -151,6 +151,10 @@ class Settings(BaseSettings):
     # market BUY (placed as a FOK limit at entry*(1+slippage), capped at 0.99) so a
     # tap from a public channel can't fill at an arbitrarily worse price.
     news_bet_slippage: float = Field(0.05, alias="NEWS_BET_SLIPPAGE")
+    # Fixed stake (USD) for a one-tap news-channel bet. The card shows this stake's
+    # potential payout per outcome (stake ÷ slippage-capped price), and tapping a CTA
+    # places exactly this amount (no amount picker on the news path).
+    news_bet_amount_usd: float = Field(5.0, alias="NEWS_BET_AMOUNT_USD")
     # How long a pending bet intent (stored when a non-connected user taps a bet
     # CTA) stays resumable after onboarding before the cleanup tick expires it.
     news_intent_ttl_hours: int = Field(24, alias="NEWS_INTENT_TTL_HOURS")

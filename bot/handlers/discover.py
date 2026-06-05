@@ -274,21 +274,6 @@ def _custom_btn(context: ContextTypes.DEFAULT_TYPE, gen, idx, side: str) -> Inli
                                 callback_data=f"buycustom:{gen}:{idx}:{side}")
 
 
-def _bet_amount_screen(context: ContextTypes.DEFAULT_TYPE, m: dict, gen, idx, side: str):
-    """Amount picker for a PRE-SELECTED outcome (skips the YES/NO panel). The
-    amount/custom/switch buttons reuse the buy:/buyamt:/buycustom: callbacks, so the
-    generation guard and the shared placement path handle them unchanged."""
-    outcome = "YES" if side == "yes" else "NO"
-    other = "no" if side == "yes" else "yes"
-    switch = InlineKeyboardButton(common.tr(context, "bot.news.bet_switch"),
-                                  callback_data=f"buy:{gen}:{idx}:{other}")
-    body = (f"💵 <b>{common.esc(outcome)} — {common.esc(m.get('question') or '?')}</b>\n\n"
-            f"🟢 YES {_pct(m.get('yes_price'))}    🔴 NO {_pct(m.get('no_price'))}\n\n"
-            f"{common.esc(common.tr(context, 'bot.market.choose_amount'))}")
-    rows = [_amount_row(gen, idx, side), [_custom_btn(context, gen, idx, side), switch]]
-    return body, common.with_nav(context, rows)
-
-
 def _wallet_picker_screen(context: ContextTypes.DEFAULT_TYPE, m: dict, gen, side: str, accts):
     outcome = "YES" if side == "yes" else "NO"
     rows = [[InlineKeyboardButton(f"💼 {a.label} · {common.short(a.wallet_address, 6, 4)}",
@@ -346,11 +331,13 @@ async def show_market_for_bet(
         except Exception as exc:  # noqa: BLE001 — fall back to the active account
             logger.info("list_accounts failed in bet funnel: %s", type(exc).__name__)
     if len(accts) > 1:
+        # multiple wallets → pick one first; the pick then one-taps the fixed $5.
         text, kb = _wallet_picker_screen(context, m, gen, side, accts)
-    else:
-        text, kb = _bet_amount_screen(context, m, gen, 0, side)
-    await _send_bet_screen(update, context, text, kb, chat_id)
-    return True
+        await _send_bet_screen(update, context, text, kb, chat_id)
+        return True
+    # single wallet → one-tap fixed-$5 confirm (no amount picker on the news path)
+    return await _place_bet_amount(update, context, gen=gen, idx="0", side=side,
+                                   amount=settings.news_bet_amount_usd, chat_id=chat_id)
 
 
 async def on_bet_account(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -380,8 +367,9 @@ async def on_bet_account(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await common.reply(update, context, "bot.error.no_account", reply_markup=common.connect_keyboard(context))
         return
     nb["account_id"] = chosen
-    text, kb = _bet_amount_screen(context, m, gen, 0, nb.get("side", "yes"))
-    await common.screen(update, context, text=text, reply_markup=kb)
+    # wallet chosen → one-tap the fixed $5 (no amount picker on the news path)
+    await _place_bet_amount(update, context, gen=gen, idx="0", side=nb.get("side", "yes"),
+                            amount=settings.news_bet_amount_usd)
 
 
 async def on_buy(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -402,35 +390,37 @@ async def on_buy(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def _place_bet_amount(update: Update, context: ContextTypes.DEFAULT_TYPE, *,
-                            gen, idx, side: str, amount: float) -> None:
-    """Shared by the preset (buyamt:) and typed (custom) paths: resolve the stashed
-    market, build the confirmation intent, news-tag + slippage-cap when in the bet
-    funnel, and hand off to confirm.request."""
+                            gen, idx, side: str, amount: float, chat_id: int | None = None) -> bool:
+    """Shared by the news one-tap path and the manual preset/typed paths: resolve the
+    stashed market, build the confirmation intent, news-tag + slippage-cap when in the
+    bet funnel, and hand off to confirm.request. Returns True once the confirm is
+    armed, False if the market was outdated/closed/unavailable (so the news-resume
+    caller doesn't mark the intent 'resumed')."""
     m = _resolve(context, gen, idx)
     if m is None:
-        await common.reply(update, context, "bot.discover.outdated", reply_markup=common.with_nav(context))
-        return
+        await _bet_text(update, context, "bot.discover.outdated", chat_id)
+        return False
     outcome = "YES" if side == "yes" else "NO"
     nb = context.user_data.get(_NEWS_BET)
     is_news = bool(nb and str(nb.get("gen")) == str(gen))
 
     if is_news:
         # A news-channel bet MUST be slippage-capped on a CURRENT price — the stash
-        # can be minutes old (custom-amount entry, wallet picker). Re-resolve fresh
-        # (cache-backed) at placement; refuse if closed/unavailable rather than cap
-        # on a stale price or fall back to an uncapped market order.
+        # can be minutes old (wallet picker, resume). Re-resolve fresh (cache-backed)
+        # at placement; refuse if closed/unavailable rather than cap on a stale price
+        # or fall back to an uncapped market order.
         state, fresh = await asyncio.to_thread(markets.get_market_state, str(m.get("id") or ""))
         if state == "closed":
-            await common.reply(update, context, "bot.news.bet_closed", reply_markup=common.with_nav(context))
-            return
+            await _bet_text(update, context, "bot.news.bet_closed", chat_id)
+            return False
         if state != "open" or not fresh:
-            await common.reply(update, context, "bot.news.bet_unavailable", reply_markup=common.with_nav(context))
-            return
+            await _bet_text(update, context, "bot.news.bet_unavailable", chat_id)
+            return False
         token = fresh.get("yes_token") if side == "yes" else fresh.get("no_token")
         entry_price = fresh.get("yes_price") if side == "yes" else fresh.get("no_price")
         if entry_price is None or not token:  # unresolvable price/token → refuse (0.0 is a valid longshot)
-            await common.reply(update, context, "bot.news.bet_unavailable", reply_markup=common.with_nav(context))
-            return
+            await _bet_text(update, context, "bot.news.bet_unavailable", chat_id)
+            return False
         title = fresh.get("question") or token
         fields = dict(side="buy", token_id=str(token), amount=amount, title=title, outcome=outcome,
                       market_id=str(fresh.get("id") or ""), entry_price=entry_price,
@@ -447,8 +437,9 @@ async def _place_bet_amount(update: Update, context: ContextTypes.DEFAULT_TYPE, 
                       market_id=str(m.get("id") or ""), entry_price=entry_price)
 
     intent = confirm.make_intent("market", **fields)
-    await confirm.request(update, context, intent, "bot.confirm.buy_market",
+    await confirm.request(update, context, intent, "bot.confirm.buy_market", chat_id=chat_id,
                           outcome=outcome, title=common.md_safe(title, 60), amount=f"{amount:g}")
+    return True
 
 
 async def on_buy_amount(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

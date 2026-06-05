@@ -62,8 +62,11 @@ async def _wants_confirmation(user_id: int) -> bool:
 
 
 async def request(update: Update, context: ContextTypes.DEFAULT_TYPE, intent: dict,
-                  confirm_key: str, **text_vars) -> None:
-    """Ask for confirmation (or execute immediately if the user opted out)."""
+                  confirm_key: str, *, chat_id: int | None = None, **text_vars) -> None:
+    """Ask for confirmation (or execute immediately if the user opted out).
+
+    ``chat_id`` sends the confirm prompt via the bot (used by the news-bet resume
+    path, where the inbound message was deleted) instead of replying to a message."""
     user_id = common.db_user_id(context)
     if user_id is None:
         await common.reply(update, context, "bot.error.no_account")
@@ -86,11 +89,12 @@ async def request(update: Update, context: ContextTypes.DEFAULT_TYPE, intent: di
 
     intent_id = secrets.token_hex(4)
     context.user_data.setdefault("pending_orders", {})[intent_id] = intent
-    await update.effective_message.reply_text(
-        common.tr(context, confirm_key, **text_vars),
-        parse_mode="Markdown",
-        reply_markup=_confirm_keyboard(context, intent_id),
-    )
+    text = common.tr(context, confirm_key, **text_vars)
+    kb = _confirm_keyboard(context, intent_id)
+    if chat_id is not None:
+        await context.bot.send_message(chat_id=chat_id, text=text, parse_mode="Markdown", reply_markup=kb)
+    else:
+        await update.effective_message.reply_text(text, parse_mode="Markdown", reply_markup=kb)
 
 
 # ── callbacks ───────────────────────────────────────────────────────────────

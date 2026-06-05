@@ -21,6 +21,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import BadRequest, TelegramError
 
 from bot.news import cta as cta_mod
+from core.config import settings
 from core.i18n import t
 
 logger = logging.getLogger(__name__)
@@ -46,16 +47,33 @@ def _pct(price) -> str:
         return ""
 
 
+def _money(x: float) -> str:
+    return f"${x:,.0f}" if x >= 100 else f"${x:,.2f}"
+
+
+def _potential_payout(price) -> float | None:
+    """What the fixed news stake returns IF this outcome resolves your way, at the
+    slippage-capped price actually used (mirrors Polymarket.place_capped_buy):
+    shares = stake / clamp(price*(1+slippage)), each worth $1 on a win."""
+    try:
+        p = float(price)
+    except (TypeError, ValueError):
+        return None
+    p = min(max(p * (1 + settings.news_bet_slippage), 0.01), 0.99)
+    return settings.news_bet_amount_usd / p if p > 0 else None
+
+
 def _outcome_text(outcome: dict) -> str:
-    """Button/link text for a dynamic bet outcome — action-first so the wager is
-    unambiguous: '✅ Bet Yes · 73%', '❌ Bet No · 27%', '📈 Bet <65,000 · 73%'
-    (the market question is shown above, in the caption). The trailing % is the
-    market's live odds for that outcome."""
+    """Button/link text for a dynamic bet outcome — action-first AND showing the
+    fixed-stake potential payout: '✅ Bet $5 on Yes → $7.81', '❌ Bet $5 on No → $13.89',
+    '📈 Bet $5 on <65,000 → $11.90' (the payout is what $5 returns IF that outcome
+    wins, at current odds — never a guarantee; the market question is in the caption)."""
     label = (outcome.get("label") or "?").strip()
     emoji = "✅" if label == "Yes" else "❌" if label == "No" else "📈"
-    pct = _pct(outcome.get("price"))
-    text = f"{emoji} Bet {label}"
-    return f"{text} · {pct}" if pct else text
+    stake = settings.news_bet_amount_usd
+    base = f"{emoji} Bet ${stake:g} on {label}"
+    payout = _potential_payout(outcome.get("price"))
+    return f"{base} → {_money(payout)}" if payout else base
 
 
 def snapshot(item) -> SimpleNamespace:
