@@ -44,5 +44,3 @@ def downgrade() -> None:
     with op.batch_alter_table('news_poll_votes', schema=None) as batch_op:
         batch_op.drop_index('ix_news_poll_votes_item')
     op.drop_table('news_poll_votes')
-</content>
-</invoke>

@@ -225,7 +225,8 @@
       "bet_connect_prompt": "📊 要对以下内容押 {outcome}：\n\n“{headline}”\n\n请先连接钱包 — 只需一分钟，随后即可在此处继续下注。",
       "bet_closed": "⛔️ 该市场已关闭 — 无法再下注。",
       "bet_unavailable": "⚠️ 暂时无法加载该市场，请稍后再试。",
-      "bet_pick_wallet": "用哪个钱包？"
+      "bet_pick_wallet": "用哪个钱包？",
+      "vote_recorded": "🗳 已投票：{outcome}"
     }
   },
   "dash": {

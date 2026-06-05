@@ -39,9 +39,9 @@ NEWS_TOP_N_KEY = "news_top_n"         # how many of a cycle's fresh items autose
 # "1" (default) → auto-approve every fresh item that matches a TRENDING Polymarket
 # event, so bet-relevant headlines publish hands-free regardless of raw score.
 NEWS_AUTOAPPROVE_TRENDING_KEY = "news_autoapprove_trending"
-# "1" (default) → post an anonymous engagement poll (the market question + its
-# outcomes) under each channel card. Sentiment/social-proof only — betting stays on
-# the card buttons.
+# "1" (default) → add an inline engagement poll (callback vote buttons mirroring the
+# outcomes, with a live tally) to each channel card — same message, under the bet
+# buttons. Sentiment/social-proof only; betting stays on the deep-link bet buttons.
 NEWS_POLL_KEY = "news_poll"
 
 

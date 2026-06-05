@@ -8,11 +8,16 @@ from __future__ import annotations
 import logging
 
 from telegram import InlineKeyboardButton, Update
+from telegram.error import TelegramError
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes
 
 from bot.handlers import common
+from bot.news import publisher
+from core.config import settings
 from db.engine import async_session_scope
+from db.models import NewsItem
 from db.repositories import news_prefs
+from db.repositories import news_votes
 
 logger = logging.getLogger(__name__)
 
@@ -151,6 +156,50 @@ async def on_news(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await common.reply(update, context, "bot.error.generic")
 
 
+async def on_news_vote(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Record an inline engagement-poll vote on a channel news card (``nv:<item>:<idx>``)
+    and re-render the card's keyboard with the live tally. Sentiment only — placing a
+    real bet stays on the card's deep-link buttons. One vote per Telegram account per
+    item; tapping a different option switches it."""
+    query = update.callback_query
+    if query is None:
+        return
+    voter = update.effective_user
+    try:
+        parts = (query.data or "").split(":")
+        item_id, index = int(parts[1]), int(parts[2])
+        if voter is None:
+            await query.answer()
+            return
+        async with async_session_scope() as s:
+            item = await s.get(NewsItem, item_id)
+            outcomes = list(getattr(item, "cta_outcomes", None) or []) if item else []
+            if not outcomes or index < 0 or index >= len(outcomes):
+                await query.answer()  # stale/edited payload — just dismiss the spinner
+                return
+            await news_votes.cast_vote(s, item_id=item_id, tg_user_id=voter.id, outcome_index=index)
+            await s.flush()
+            tallies = await news_votes.tallies(s, item_id)
+            snap = publisher.snapshot(item)  # detach so the keyboard build can't lazy-load
+        label = (snap.cta_outcomes[index].get("label") or "?").strip()
+        await query.answer(text=common.tr(context, "bot.news.vote_recorded", outcome=label))
+        kb = publisher.build_keyboard(snap, bot_username=getattr(context.bot, "username", None),
+                                      lang=settings.news_channel_lang, with_poll=True, tallies=tallies)
+        try:
+            await query.edit_message_reply_markup(reply_markup=kb)
+        except TelegramError:
+            # "message is not modified" (re-tap of the same option) or a transient edit
+            # error — the vote is already recorded, so this is non-fatal.
+            pass
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("on_news_vote(%s) failed: %s", query.data, type(exc).__name__)
+        try:
+            await query.answer()
+        except TelegramError:
+            pass
+
+
 def register(application: Application) -> None:
     application.add_handler(CommandHandler("news", news_command))
+    application.add_handler(CallbackQueryHandler(on_news_vote, pattern=r"^nv:\d+:\d+$"))
     application.add_handler(CallbackQueryHandler(on_news, pattern=r"^news:"))

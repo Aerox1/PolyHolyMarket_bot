@@ -225,7 +225,8 @@
       "bet_connect_prompt": "📊 To bet {outcome} on:\n\n“{headline}”\n\nConnect your wallet first — it only takes a minute, then your bet picks up right here.",
       "bet_closed": "⛔️ This market has closed — you can't bet on it anymore.",
       "bet_unavailable": "⚠️ Couldn't load this market right now. Please try again in a moment.",
-      "bet_pick_wallet": "Which wallet?"
+      "bet_pick_wallet": "Which wallet?",
+      "vote_recorded": "🗳 Voted: {outcome}"
     }
   },
   "dash": {

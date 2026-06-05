@@ -112,25 +112,34 @@ def test_build_keyboard_bet_vs_open_and_none():
     assert publisher.build_keyboard(_item(cta_url=None), bot_username=None, lang="en") is None
 
 
-# ── build_poll (engagement poll mirroring the bet) ─────────────────────────────
+# ── inline engagement poll (callback vote buttons ON the card) ─────────────────
 
-def test_build_poll_binary_multi_and_none():
-    yn = [{"label": "Yes", "market_id": "0xM", "side": "yes", "price": 0.4},
-          {"label": "No", "market_id": "0xM", "side": "no", "price": 0.6}]
-    q, opts = publisher.build_poll(_item(cta_market_question="Will X happen?", cta_outcomes=yn))
-    assert q == "Will X happen?" and opts == ["Yes", "No"]
-    # multi-outcome event → the candidate/bucket labels (no odds in the option text)
-    multi = [{"label": "Democrats", "market_id": "0xd"}, {"label": "Republicans", "market_id": "0xr"},
-             {"label": "Other", "market_id": "0xo"}]
-    q, opts = publisher.build_poll(_item(cta_market_question="Who wins?", cta_outcomes=multi))
-    assert opts == ["Democrats", "Republicans", "Other"]
-    # no outcomes → no poll
-    assert publisher.build_poll(_item(cta_outcomes=None)) is None
-    # fewer than 2 distinct options (deduped case-insensitively) → no poll
-    assert publisher.build_poll(_item(cta_market_question="Q", cta_outcomes=[{"label": "Yes"}, {"label": "yes"}])) is None
-    # falls back to the headline when there's no market question
-    q, opts = publisher.build_poll(_item(title_orig="Headline", cta_market_question=None, cta_outcomes=yn))
-    assert q == "Headline"
+def _votes(kb):
+    return [b for row in kb.inline_keyboard for b in row if b.callback_data]
+
+
+def test_build_keyboard_inline_poll_buttons_and_tallies():
+    outs = [{"label": "Yes", "market_id": "0xM", "side": "yes", "price": 0.6},
+            {"label": "No", "market_id": "0xM", "side": "no", "price": 0.4}]
+    it = _item(id=7, cta_market_id="0xM", cta_outcomes=outs, cta_url="https://t.me/B?start=n-7")
+    # with_poll → vote buttons (callback nv:<id>:<i>) appended UNDER the bet buttons,
+    # mirroring the outcomes by index; no % until votes exist
+    kb = publisher.build_keyboard(it, bot_username="B", lang="en", with_poll=True)
+    assert [b.callback_data for b in _votes(kb)] == ["nv:7:0", "nv:7:1"]
+    assert [b.text for b in _votes(kb)] == ["🗳 Yes", "🗳 No"]
+    # the bet URL buttons are still there, above the poll (one message, both)
+    urls = [b.url for row in kb.inline_keyboard for b in row if b.url]
+    assert urls == ["https://t.me/B?start=nb-7-0", "https://t.me/B?start=nb-7-1"]
+    # tallies → live share of all votes on the item
+    kb2 = publisher.build_keyboard(it, bot_username="B", lang="en", with_poll=True, tallies={0: 3, 1: 1})
+    assert [b.text for b in _votes(kb2)] == ["🗳 Yes · 75%", "🗳 No · 25%"]
+    # without with_poll → no vote buttons (bet URLs only) — unchanged legacy shape
+    assert _votes(publisher.build_keyboard(it, bot_username="B", lang="en")) == []
+    # multi-outcome events keep their real labels, laid out 2-up
+    multi = [{"label": "Dems"}, {"label": "Reps"}, {"label": "Other"}]
+    kb3 = publisher.build_keyboard(_item(id=9, cta_market_id="0xM", cta_outcomes=multi),
+                                   bot_username="B", lang="en", with_poll=True)
+    assert [b.callback_data for b in _votes(kb3)] == ["nv:9:0", "nv:9:1", "nv:9:2"]
 
 
 # ── post_item_to_channel (mocked bot) ─────────────────────────────────────────
@@ -156,10 +165,6 @@ class _Bot:
     async def send_message(self, **kw):
         self.calls.append(("text", kw))
         return _Msg(202)
-
-    async def send_poll(self, **kw):
-        self.calls.append(("poll", kw))
-        return _Msg(303)
 
     async def get_me(self):
         return SimpleNamespace(id=1)
@@ -243,21 +248,18 @@ async def test_publish_job_posts_and_marks_sent_and_is_idempotent():
         assert (await s.execute(select(func.count()).select_from(NewsChannelPost))).scalar() == 1
 
 
-async def test_publish_job_posts_engagement_poll_under_card():
+async def test_publish_job_embeds_inline_poll_on_card():
     await _set_channel()
     outs = [{"label": "Yes", "market_id": "0xMKT", "side": "yes", "price": 0.4},
             {"label": "No", "market_id": "0xMKT", "side": "no", "price": 0.6}]
-    await _seed_ready(url_hash="poll1", outcomes=outs)
+    item_id = await _seed_ready(url_hash="poll1", outcomes=outs)
     bot = _Bot()
     await news_jobs.publish_job(SimpleNamespace(bot=bot))
-    kinds = [c[0] for c in bot.calls]
-    assert kinds == ["text", "poll"]  # card first, then the poll under it
-    pkw = next(kw for k, kw in bot.calls if k == "poll")
-    assert pkw["question"] == "Will this resolve YES?"
-    assert pkw["options"] == ["Yes", "No"]
-    assert pkw["is_anonymous"] is True and pkw["type"] == "regular"
-    # poll is threaded UNDER the card (reply-linked to the card's message id 202)
-    assert pkw["reply_parameters"].message_id == 202
+    # ONE message — the poll is inline on the card, not a separate poll send
+    assert [c[0] for c in bot.calls] == ["text"]
+    kb = bot.calls[0][1]["reply_markup"]
+    cbs = [b.callback_data for row in kb.inline_keyboard for b in row if b.callback_data]
+    assert cbs == [f"nv:{item_id}:0", f"nv:{item_id}:1"]  # inline vote buttons on the card
 
 
 async def test_publish_job_poll_can_be_disabled():
@@ -269,35 +271,36 @@ async def test_publish_job_poll_can_be_disabled():
         await appconfig.set_(s, news_jobs.NEWS_POLL_KEY, "0")
     bot = _Bot()
     await news_jobs.publish_job(SimpleNamespace(bot=bot))
-    assert [c[0] for c in bot.calls] == ["text"]  # card only, no poll
+    assert [c[0] for c in bot.calls] == ["text"]
+    kb = bot.calls[0][1]["reply_markup"]
+    # bet buttons remain (URL), but no inline poll vote buttons
+    assert not any(b.callback_data for row in kb.inline_keyboard for b in row)
 
 
 async def test_publish_job_no_poll_without_outcomes():
-    # the default _seed_ready has a market question but NO outcomes → no poll
+    # the default _seed_ready has a market question but NO outcomes → no vote buttons
     await _set_channel()
     await _seed_ready(url_hash="poll3")
     bot = _Bot()
     await news_jobs.publish_job(SimpleNamespace(bot=bot))
-    assert "poll" not in [c[0] for c in bot.calls]
+    assert [c[0] for c in bot.calls] == ["text"]
+    kb = bot.calls[0][1]["reply_markup"]
+    assert not any(b.callback_data for row in kb.inline_keyboard for b in row)
 
 
-async def test_post_item_poll_failure_is_non_fatal():
-    """A poll send error must NOT fail the item — the card msg id is still returned
-    (the card is already posted + claimed; a re-sent card is worse than a lost poll)."""
-    from telegram.error import TelegramError
-
-    class _PollFails(_Bot):
-        async def send_poll(self, **kw):
-            self.calls.append(("poll", kw))
-            raise TelegramError("poll boom")
-
-    bot = _PollFails()
-    outs = [{"label": "Yes", "market_id": "0xM"}, {"label": "No", "market_id": "0xM"}]
-    it = _item(cta_market_question="Q?", cta_outcomes=outs)
+async def test_post_item_with_poll_is_single_message():
+    """A poll-enabled post is ONE message: the bet buttons plus the inline vote
+    buttons share the card's keyboard (no separate poll send)."""
+    bot = _Bot()
+    outs = [{"label": "Yes", "market_id": "0xM", "side": "yes", "price": 0.6},
+            {"label": "No", "market_id": "0xM", "side": "no", "price": 0.4}]
+    it = _item(id=5, cta_market_id="0xM", cta_market_question="Q?", cta_outcomes=outs)
     mid = await publisher.post_item_to_channel(bot, it, chat_id=-100, lang="en",
                                                bot_username="TestBot", with_poll=True)
-    assert mid == 202  # card succeeded despite the poll failure
-    assert [c[0] for c in bot.calls] == ["text", "poll"]
+    assert mid == 202
+    assert [c[0] for c in bot.calls] == ["text"]  # single message
+    kb = bot.calls[0][1]["reply_markup"]
+    assert [b.callback_data for row in kb.inline_keyboard for b in row if b.callback_data] == ["nv:5:0", "nv:5:1"]
 
 
 async def test_publish_job_noop_without_channel():
