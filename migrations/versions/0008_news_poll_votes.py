@@ -7,7 +7,7 @@ updates the chosen outcome. Replaces the old separate native-poll message — th
 poll now lives as callback buttons on the card itself.
 
 Revision ID: 0008_news_poll_votes
-Revises: 0007_user_stats_leaderboard_indexes
+Revises: 0007_user_stats_lb_indexes
 Create Date: 2026-06-05 00:00:00.000000
 
 """
@@ -19,7 +19,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = '0008_news_poll_votes'
-down_revision: Union[str, Sequence[str], None] = '0007_user_stats_leaderboard_indexes'
+down_revision: Union[str, Sequence[str], None] = '0007_user_stats_lb_indexes'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

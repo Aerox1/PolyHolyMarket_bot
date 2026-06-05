@@ -5,7 +5,7 @@ Index the two leaderboard metrics that were missing one — ``realized_pnl_usd``
 queries (METRICS in db.repositories.stats) are index-backed and don't fall back
 to a full-table sort as the user base grows. bets/volume were already indexed.
 
-Revision ID: 0007_user_stats_leaderboard_indexes
+Revision ID: 0007_user_stats_lb_indexes
 Revises: 0006_ledger_streak_idempotency
 Create Date: 2026-06-04 00:00:00.000000
 
@@ -15,8 +15,9 @@ from typing import Sequence, Union
 from alembic import op
 
 
-# revision identifiers, used by Alembic.
-revision: str = '0007_user_stats_leaderboard_indexes'
+# revision identifiers, used by Alembic. NB: must be <= 32 chars (alembic_version
+# column is varchar(32)) — the original 35-char id overflowed on upgrade.
+revision: str = '0007_user_stats_lb_indexes'
 down_revision: Union[str, Sequence[str], None] = '0006_ledger_streak_idempotency'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
