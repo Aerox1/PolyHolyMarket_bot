@@ -95,3 +95,64 @@ async def test_trending_matches_excludes_name_only(monkeypatch):
         (2, "Gavin Newsom and AOC clash over the 2028 Democratic nomination")])  # on-topic
     assert 1 not in matched
     assert 2 in matched
+
+
+# ── LLM relevance backstop (lexical = recall, LLM = decision) ──────────────────
+
+async def test_llm_pick_event_parses_index_null_and_unavailable(monkeypatch):
+    import core.gemini as gemini_mod  # provider defaults to gemini in the test env
+    cands = [_ev("A", [_mk("0xa", "qa?", "0.5", "0.5")]), _ev("B", [_mk("0xb", "qb?", "0.5", "0.5")])]
+
+    def _gen(ret):
+        async def _f(session, *, prompt, kind="news_text", category_id=None, response_json=False):
+            return ret
+        return _f
+
+    monkeypatch.setattr(gemini_mod, "generate_text", _gen('{"index": 1}'))
+    assert await news_cta._llm_pick_event(object(), "t", "b", cands) == 1
+    monkeypatch.setattr(gemini_mod, "generate_text", _gen('{"index": null}'))
+    assert await news_cta._llm_pick_event(object(), "t", "b", cands) is None
+    monkeypatch.setattr(gemini_mod, "generate_text", _gen(None))         # budget / no provider
+    assert await news_cta._llm_pick_event(object(), "t", "b", cands) is news_cta._LLM_UNAVAILABLE
+    monkeypatch.setattr(gemini_mod, "generate_text", _gen("not json"))   # unparseable
+    assert await news_cta._llm_pick_event(object(), "t", "b", cands) is news_cta._LLM_UNAVAILABLE
+    monkeypatch.setattr(gemini_mod, "generate_text", _gen('{"index": 9}'))  # out of range
+    assert await news_cta._llm_pick_event(object(), "t", "b", cands) is news_cta._LLM_UNAVAILABLE
+
+
+async def test_resolve_cta_llm_rejects_topical_lookalike(monkeypatch):
+    # a candidate that PASSES the lexical gate but the judge deems off-topic → no CTA
+    # (the same-category miss class the deterministic guard can't catch).
+    ev = _ev("Bitcoin price", [_mk("0xbtc", "Will Bitcoin close above $100k in 2026?", "0.3", "0.7")])
+    monkeypatch.setattr(news_cta.markets, "search_events", lambda q, n=20: [ev])
+    monkeypatch.setattr(news_cta.markets, "trending_events", lambda n=40: [])
+
+    async def _reject(session, title, body, candidates):
+        return None
+    monkeypatch.setattr(news_cta, "_llm_pick_event", _reject)
+    assert await news_cta.resolve_cta(title="Bitcoin price recap", body="x", session=object()) is None
+
+
+async def test_resolve_cta_degrades_to_lexical_when_judge_unavailable(monkeypatch):
+    ev = _ev("Bitcoin price", [_mk("0xbtc", "Will Bitcoin close above $100k in 2026?", "0.3", "0.7")])
+    monkeypatch.setattr(news_cta.markets, "search_events", lambda q, n=20: [ev])
+    monkeypatch.setattr(news_cta.markets, "trending_events", lambda n=40: [])
+
+    async def _unavail(session, title, body, candidates):
+        return news_cta._LLM_UNAVAILABLE
+    monkeypatch.setattr(news_cta, "_llm_pick_event", _unavail)
+    cta = await news_cta.resolve_cta(title="Bitcoin surges toward the $100k milestone", body="x", session=object())
+    assert cta and cta["market_id"] == "0xbtc"   # kept the lexical best
+
+
+async def test_resolve_cta_llm_picks_specific_candidate(monkeypatch):
+    ev1 = _ev("Bitcoin price", [_mk("0xbtc", "Will Bitcoin close above $100k in 2026?", "0.3", "0.7")])
+    ev2 = _ev("Bitcoin dominance", [_mk("0xdom", "Will Bitcoin dominance exceed 60% in 2026?", "0.3", "0.7")])
+    monkeypatch.setattr(news_cta.markets, "search_events", lambda q, n=20: [ev1, ev2])
+    monkeypatch.setattr(news_cta.markets, "trending_events", lambda n=40: [])
+
+    async def _pick_second(session, title, body, candidates):
+        return 1
+    monkeypatch.setattr(news_cta, "_llm_pick_event", _pick_second)
+    cta = await news_cta.resolve_cta(title="Bitcoin dominance and price both climb", body="x", session=object())
+    assert cta and cta["market_id"] == "0xdom"

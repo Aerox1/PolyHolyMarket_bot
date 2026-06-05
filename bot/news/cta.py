@@ -7,12 +7,22 @@ All Polymarket calls are blocking Gamma HTTP, wrapped in ``asyncio.to_thread``.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import re
 
 from polymarket import markets
 
 logger = logging.getLogger(__name__)
+
+# How many top lexical candidates to hand the LLM relevance judge. Lexical overlap
+# is RECALL (shortlist plausible events); the LLM is the PRECISION decision.
+LLM_CANDIDATES = 5
+
+# Sentinel: the LLM judge could not run (no provider / budget reached / parse
+# failure). Distinct from None ("ran, none are relevant") so the caller can fall
+# back to the lexical best instead of dropping the CTA.
+_LLM_UNAVAILABLE: object = object()
 
 # Minimum shared significant words between a headline and a market question for the
 # market to count as "about this story". Gamma's title_like search falls back to
@@ -128,16 +138,62 @@ def _build_outcomes(event: dict) -> list[dict]:
     ]
 
 
+async def _llm_pick_event(session, title: str, body: str, candidates: list[dict]):
+    """Ask the news-text LLM which candidate event the story is GENUINELY about.
+
+    Returns the chosen index, ``None`` (the model judged none relevant → drop the
+    CTA), or ``_LLM_UNAVAILABLE`` (no provider / budget reached / unparseable → the
+    caller keeps the lexical best). Routes through the SAME budget-gated provider as
+    translate (claude_text / gemini), so it costs one small, ledger-charged call."""
+    from core.config import settings
+    listing = "\n".join(
+        f"{i}: {e.get('title')!r} — e.g. {((e.get('markets') or [{}])[0] or {}).get('question') or ''!r}"
+        for i, e in enumerate(candidates)
+    )
+    prompt = (
+        "Match a NEWS STORY to the ONE prediction market it is GENUINELY about. A "
+        "shared person name or a single incidental keyword is NOT enough — the "
+        "market's question must concern what the story actually reports/claims.\n\n"
+        f"STORY HEADLINE: {title}\nSTORY BODY: {(body or '')[:1200]}\n\n"
+        "CANDIDATE MARKETS:\n" + listing + "\n\n"
+        'Reply with ONLY JSON: {"index": <int>} for the market the story is about, '
+        'or {"index": null} if NONE genuinely fits.'
+    )
+    try:
+        if settings.news_text_provider == "claude":
+            from core import claude_text
+            raw = await claude_text.generate_json(session, prompt=prompt, kind="cta_pick")
+        else:
+            from core import gemini
+            raw = await gemini.generate_text(session, prompt=prompt, kind="cta_pick", response_json=True)
+    except Exception as exc:  # noqa: BLE001 — relevance check is best-effort
+        logger.info("CTA llm pick failed: %s", type(exc).__name__)
+        return _LLM_UNAVAILABLE
+    if not raw:
+        return _LLM_UNAVAILABLE  # no provider / budget reached
+    try:
+        idx = json.loads(raw).get("index")
+    except (json.JSONDecodeError, ValueError, AttributeError):
+        return _LLM_UNAVAILABLE
+    if idx is None:
+        return None  # model: none of the candidates fit → no CTA
+    if isinstance(idx, int) and 0 <= idx < len(candidates):
+        return idx
+    return _LLM_UNAVAILABLE  # out-of-range / garbage → don't trust it, keep lexical best
+
+
 async def resolve_cta(
-    *, title: str, category_tag_slug: str | None = None, hint_market_id: str | None = None
+    *, title: str, body: str = "", category_tag_slug: str | None = None,
+    hint_market_id: str | None = None, session=None,
 ) -> dict | None:
     """Resolve a news item's bet CTA as ``{market_id, question, outcomes}`` or None.
 
-    Matches the headline to an EVENT (text search + trending, relevance-gated), then
-    surfaces that event's real outcomes — multi-way events keep their candidates/
-    buckets instead of collapsing to Yes/No. ``outcomes`` is a list of
-    ``{label, market_id, side, price}``; betting one = buy that side on that
-    (sub)market, resolved fresh at click. Best-effort → None on no match / error."""
+    Lexical overlap is RECALL: it shortlists topically-plausible events (relevance-
+    gated, with the entity-collision guard). When a ``session`` is supplied the LLM
+    judge makes the PRECISION decision — picks the right candidate or rejects all
+    (catching same-topic look-alikes a keyword match can't, e.g. a Bitcoin-holdings
+    story vs a Bitcoin-price market). Without a session, or if the judge can't run,
+    it degrades to the lexical best. Best-effort → None on no match / error."""
     if hint_market_id:
         try:
             m = await asyncio.to_thread(markets.get_market, hint_market_id)
@@ -156,22 +212,29 @@ async def resolve_cta(
     except Exception as exc:  # noqa: BLE001 — CTA is optional; never fail the render
         logger.info("CTA resolve failed: %s", type(exc).__name__)
         return None
-    best_ev, best_score = None, 0
-    for e in events:
-        if not isinstance(e, dict):
-            continue
-        s = _event_relevance(title, e)
-        if s > best_score:
-            best_ev, best_score = e, s
-    if not best_ev or best_score < MIN_TOKEN_OVERLAP:
+    # RECALL: every event clearing the (entity-collision-guarded) lexical gate, best first.
+    scored = [(s, e) for e in events if isinstance(e, dict)
+              and (s := _event_relevance(title, e)) >= MIN_TOKEN_OVERLAP]
+    if not scored:
         return None
-    outcomes = _build_outcomes(best_ev)
+    scored.sort(key=lambda se: se[0], reverse=True)
+    candidates = [e for _s, e in scored[:LLM_CANDIDATES]]
+
+    chosen = candidates[0]  # lexical best — default + fallback
+    if session is not None:
+        pick = await _llm_pick_event(session, title, body, candidates)
+        if pick is None:
+            return None  # PRECISION: the judge found none genuinely relevant → no CTA
+        if pick is not _LLM_UNAVAILABLE:
+            chosen = candidates[pick]
+
+    outcomes = _build_outcomes(chosen)
     if not outcomes:
         return None
-    question = best_ev.get("title")
+    question = chosen.get("title")
     # a plain binary (both sides share one market) reads better as the market question
     if len(outcomes) == 2 and outcomes[0]["market_id"] == outcomes[1]["market_id"]:
-        for m in (best_ev.get("markets") or []):
+        for m in (chosen.get("markets") or []):
             if (m.get("conditionId") or m.get("id")) == outcomes[0]["market_id"]:
                 question = m.get("question") or question
                 break

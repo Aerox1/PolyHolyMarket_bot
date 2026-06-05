@@ -88,8 +88,10 @@ async def render_item(
         cat = await session.get(Category, item.category_id) if item.category_id else None
         cta = await cta_mod.resolve_cta(
             title=item.title_orig,
+            body=item.body_orig or "",
             category_tag_slug=(cat.tag_slug if cat else None),
             hint_market_id=item.market_id,
+            session=session,  # enables the LLM relevance judge (budget-gated, best-effort)
         )
         if cta:
             item.cta_market_id = cta.get("market_id")
