@@ -25,6 +25,25 @@ async def weekly_spend(session: AsyncSession) -> float:
     return float(total or 0)
 
 
+async def weekly_image_spend(session: AsyncSession) -> float:
+    """Rolling-7d spend on paid IMAGE generation only — gates the image budget."""
+    total = await session.scalar(
+        select(func.coalesce(func.sum(GeminiUsage.cost_usd), 0))
+        .where(GeminiUsage.ts >= _window_start(), GeminiUsage.kind == "image")
+    )
+    return float(total or 0)
+
+
+async def weekly_text_spend(session: AsyncSession) -> float:
+    """Rolling-7d spend on news TEXT (every non-image kind) — gates the SEPARATE
+    text budget, never the image budget. Claude text is subscription (notional cost)."""
+    total = await session.scalar(
+        select(func.coalesce(func.sum(GeminiUsage.cost_usd), 0))
+        .where(GeminiUsage.ts >= _window_start(), GeminiUsage.kind != "image")
+    )
+    return float(total or 0)
+
+
 async def record(session: AsyncSession, *, category_id: int | None, cost_usd: float,
                  model: str | None, ok: bool, kind: str = "image") -> None:
     session.add(GeminiUsage(category_id=category_id, cost_usd=cost_usd, model=model, ok=ok, kind=kind))

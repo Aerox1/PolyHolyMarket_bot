@@ -237,7 +237,7 @@ async def test_generate_image_budget_exactly_at_limit_proceeds(sf, monkeypatch, 
     monkeypatch.setattr(gemini, "_call_gemini_image", lambda *a, **k: (_RAW_IMG, "image/png"))
     async with sf() as s:
         await gemini_usage_repo.record(s, category_id=None, cost_usd=9.96,
-                                       model="seed", ok=True, kind="seed")
+                                       model="seed", ok=True, kind="image")
         await s.commit()
         out = await gemini.generate_image(s, slug="edge", prompt="p")  # 9.96 + 0.04 == 10.0
     assert out == "/cards/edge.png"

@@ -70,7 +70,9 @@ async def test_generate_json_no_cli_returns_none(sf, monkeypatch):
 
 
 async def test_generate_json_budget_gate_skips_call(sf, monkeypatch):
-    monkeypatch.setattr(claude_text.settings, "gemini_weekly_budget_usd", 0.0)
+    # The text budget is separate from images and 0 = unlimited; set a cap > 0 and
+    # pre-fill the rolling-week TEXT spend above it → the call is skipped entirely.
+    monkeypatch.setattr(claude_text.settings, "news_text_weekly_budget_usd", 0.50)
     called = False
 
     async def _boom(*a, **k):
@@ -80,8 +82,10 @@ async def test_generate_json_budget_gate_skips_call(sf, monkeypatch):
 
     monkeypatch.setattr(claude_text, "_query", _boom)
     async with sf() as s:
+        await gemini_usage_repo.record(s, category_id=None, cost_usd=1.0,
+                                       model="claude-cli", ok=True, kind="news_text")
+        await s.flush()
         assert await claude_text.generate_json(s, prompt="p") is None
-        assert (await s.execute(select(func.count()).select_from(GeminiUsage))).scalar() == 0
     assert called is False
 
 

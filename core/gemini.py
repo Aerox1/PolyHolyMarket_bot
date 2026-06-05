@@ -110,10 +110,10 @@ async def generate_image(
         return None
 
     budget = await appconfig.get_float(session, appconfig.GEMINI_WEEKLY_BUDGET, settings.gemini_weekly_budget_usd)
-    spent = await gemini_usage.weekly_spend(session)
+    spent = await gemini_usage.weekly_image_spend(session)  # image budget tracks image spend only
     cost = settings.gemini_image_cost_usd
     if spent + cost > budget:
-        logger.info("Gemini weekly budget reached (%.2f/%.2f) — skipping %s", spent, budget, slug)
+        logger.info("Gemini image budget reached (%.2f/%.2f) — skipping %s", spent, budget, slug)
         return None
 
     try:
@@ -234,12 +234,14 @@ async def generate_text(
     if not settings.gemini_api_key:
         return None
 
-    budget = await appconfig.get_float(session, appconfig.GEMINI_WEEKLY_BUDGET, settings.gemini_weekly_budget_usd)
-    spent = await gemini_usage.weekly_spend(session)
+    # Text uses the SEPARATE text budget (0 = unlimited), not the image budget.
+    budget = await appconfig.get_float(session, appconfig.NEWS_TEXT_WEEKLY_BUDGET, settings.news_text_weekly_budget_usd)
     cost = settings.gemini_text_cost_usd
-    if spent + cost > budget:
-        logger.info("Gemini weekly budget reached (%.2f/%.2f) — skipping %s", spent, budget, kind)
-        return None
+    if budget > 0:
+        spent = await gemini_usage.weekly_text_spend(session)
+        if spent + cost > budget:
+            logger.info("News text budget reached (%.2f/%.2f) — skipping %s", spent, budget, kind)
+            return None
 
     try:
         text = await asyncio.to_thread(_call_gemini_text, prompt, response_json=response_json)

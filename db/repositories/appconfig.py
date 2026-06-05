@@ -11,7 +11,8 @@ from sqlalchemy.orm import Session
 
 from db.models import AppConfig
 
-GEMINI_WEEKLY_BUDGET = "gemini_weekly_budget_usd"
+GEMINI_WEEKLY_BUDGET = "gemini_weekly_budget_usd"        # paid Gemini IMAGE budget
+NEWS_TEXT_WEEKLY_BUDGET = "news_text_weekly_budget_usd"  # news TEXT budget (0 = unlimited)
 
 
 # ── async (webapp / worker) ───────────────────────────────────────────────────

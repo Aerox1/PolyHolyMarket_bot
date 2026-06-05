@@ -27,7 +27,6 @@ from db.repositories.rewards import REFERRAL_UNLOCK_BETS
 NEWS_CHANNEL_ID = "news_channel_id"
 NEWS_TOP_N = "news_top_n"
 NEWS_AUTOSEND = "news_autosend"
-NEWS_POLL = "news_poll"  # post an engagement poll under each channel card (default on)
 
 
 def _today_start() -> datetime:
@@ -675,13 +674,11 @@ def news_settings(db: Session) -> dict:
         "channel_lang": settings.news_channel_lang,
         "top_n": int(appconfig.get_float_sync(db, NEWS_TOP_N, 5)),
         "autosend": appconfig.get_sync(db, NEWS_AUTOSEND, "0") == "1",
-        "poll": appconfig.get_sync(db, NEWS_POLL, "1") == "1",  # default on
     })
     return s
 
 
-def set_news_settings(db: Session, *, channel_id: str, top_n: int, autosend: bool, poll: bool = True) -> None:
+def set_news_settings(db: Session, *, channel_id: str, top_n: int, autosend: bool) -> None:
     appconfig.set_sync(db, NEWS_CHANNEL_ID, (channel_id or "").strip())
     appconfig.set_sync(db, NEWS_TOP_N, str(max(1, min(int(top_n), 20))))
     appconfig.set_sync(db, NEWS_AUTOSEND, "1" if autosend else "0")
-    appconfig.set_sync(db, NEWS_POLL, "1" if poll else "0")

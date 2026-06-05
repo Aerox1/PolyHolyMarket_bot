@@ -185,14 +185,13 @@ def news_settings_save(
     channel_id: str = Form(""),
     top_n: int = Form(5),
     autosend: bool = Form(False),
-    poll: bool = Form(False),
     admin: Admin = Depends(require_superadmin),
     db: Session = Depends(get_db),
     _csrf: None = Depends(verify_csrf),
 ):
-    repo.set_news_settings(db, channel_id=channel_id, top_n=top_n, autosend=autosend, poll=poll)
+    repo.set_news_settings(db, channel_id=channel_id, top_n=top_n, autosend=autosend)
     audit.record(db, AuditEvent.NEWS_SETTINGS_SET, actor_type="admin", actor_id=admin.id,
                  detail={"channel_set": bool(channel_id.strip()), "top_n": top_n,
-                         "autosend": autosend, "poll": poll},
+                         "autosend": autosend},
                  ip=_ip(request))
     return RedirectResponse("/news/settings", status_code=HTTP_303_SEE_OTHER)

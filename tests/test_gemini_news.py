@@ -67,7 +67,8 @@ async def test_generate_text_no_key_returns_none(sf, monkeypatch):
 
 
 async def test_generate_text_budget_gate_skips_http(sf, monkeypatch, budget):
-    monkeypatch.setattr(gemini.settings, "gemini_weekly_budget_usd", 0.0)  # nothing left
+    # text uses its OWN budget (0 = unlimited); set a cap below the per-call cost
+    monkeypatch.setattr(gemini.settings, "news_text_weekly_budget_usd", 0.001)  # < 0.002 cost
     called = False
 
     def _boom(*a, **k):
@@ -84,14 +85,14 @@ async def test_generate_text_budget_gate_skips_http(sf, monkeypatch, budget):
 
 
 async def test_generate_text_budget_exactly_at_limit_proceeds(sf, monkeypatch, budget):
-    # spent + cost == budget is allowed (gate is strict `>`). Seed spend so the
+    # spent + cost == budget is allowed (gate is strict `>`). Seed TEXT spend so the
     # next call lands exactly on the limit.
-    monkeypatch.setattr(gemini.settings, "gemini_weekly_budget_usd", 10.0)
+    monkeypatch.setattr(gemini.settings, "news_text_weekly_budget_usd", 10.0)
     monkeypatch.setattr(gemini.settings, "gemini_text_cost_usd", 0.002)
     monkeypatch.setattr(gemini, "_call_gemini_text", lambda *a, **k: "ok")
     async with sf() as s:
         await gemini_usage_repo.record(s, category_id=None, cost_usd=9.998,
-                                       model="seed", ok=True, kind="seed")
+                                       model="seed", ok=True, kind="news_text")
         await s.commit()
         assert await gemini.generate_text(s, prompt="hi") == "ok"  # 9.998 + 0.002 == 10.0
 
@@ -152,6 +153,18 @@ async def test_generate_text_failure_records_zero_cost(sf, monkeypatch, budget):
         row = (await s.execute(select(GeminiUsage))).scalar_one()
         assert row.ok is False
         assert float(row.cost_usd) == 0.0
+
+
+async def test_weekly_spend_split_by_kind(sf):
+    # the text budget and image budget gate on DISJOINT spend: image-only vs everything-else
+    async with sf() as s:
+        await gemini_usage_repo.record(s, category_id=None, cost_usd=0.04, model="img", ok=True, kind="image")
+        await gemini_usage_repo.record(s, category_id=None, cost_usd=0.002, model="txt", ok=True, kind="news_text")
+        await gemini_usage_repo.record(s, category_id=None, cost_usd=0.001, model="txt", ok=True, kind="cta_pick")
+        await s.flush()
+        assert await gemini_usage_repo.weekly_image_spend(s) == pytest.approx(0.04)
+        assert await gemini_usage_repo.weekly_text_spend(s) == pytest.approx(0.003)
+        assert await gemini_usage_repo.weekly_spend(s) == pytest.approx(0.043)
 
 
 async def test_translate_summarize_parses_json(sf, monkeypatch, budget):

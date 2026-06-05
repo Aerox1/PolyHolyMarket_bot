@@ -114,11 +114,14 @@ async def generate_json(
     if cli_path() is None:
         logger.info("no Claude CLI resolvable — skipping (set CLAUDE_CLI_PATH or install `claude`)")
         return None
-    budget = await appconfig.get_float(session, appconfig.GEMINI_WEEKLY_BUDGET, settings.gemini_weekly_budget_usd)
-    spent = await gemini_usage.weekly_spend(session)
-    if spent >= budget:
-        logger.info("weekly text budget reached (%.2f/%.2f) — skipping %s", spent, budget, kind)
-        return None
+    # Claude text is SUBSCRIPTION auth (no metered per-call cost), so it uses the
+    # separate news-text budget (default 0 = UNLIMITED) — never the paid-image budget.
+    budget = await appconfig.get_float(session, appconfig.NEWS_TEXT_WEEKLY_BUDGET, settings.news_text_weekly_budget_usd)
+    if budget > 0:
+        spent = await gemini_usage.weekly_text_spend(session)
+        if spent >= budget:
+            logger.info("news text budget reached (%.2f/%.2f) — skipping %s", spent, budget, kind)
+            return None
 
     raw, cost = await _query(prompt)
     model = settings.claude_text_model or "claude-cli"

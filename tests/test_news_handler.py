@@ -416,12 +416,7 @@ def test_register_wires_command_and_callback():
     cmd = [h for h in added if isinstance(h, CommandHandler)]
     cbq = [h for h in added if isinstance(h, CallbackQueryHandler)]
     assert len(cmd) == 1 and "news" in cmd[0].commands
-    # two callback handlers: the inline poll vote (nv:) and the prefs screen (news:)
-    assert len(cbq) == 2
-    patterns = [h.pattern for h in cbq]
-    # prefs pattern matches every news: verb (and nothing else)
-    prefs = next(p for p in patterns if p.search("news:mode:off"))
-    assert prefs.search("news:topic:5") and not prefs.search("menu:home")
-    # vote pattern matches nv:<item>:<idx> only
-    vote = next(p for p in patterns if p.search("nv:42:1"))
-    assert vote.search("nv:7:0") and not vote.search("news:mode:off") and not vote.search("nv:7:x")
+    # one callback handler: the prefs screen (news:) — the poll vote handler is gone
+    assert len(cbq) == 1
+    prefs = cbq[0].pattern
+    assert prefs.search("news:mode:off") and prefs.search("news:topic:5") and not prefs.search("menu:home")

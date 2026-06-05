@@ -39,10 +39,6 @@ NEWS_TOP_N_KEY = "news_top_n"         # how many of a cycle's fresh items autose
 # "1" (default) → auto-approve every fresh item that matches a TRENDING Polymarket
 # event, so bet-relevant headlines publish hands-free regardless of raw score.
 NEWS_AUTOAPPROVE_TRENDING_KEY = "news_autoapprove_trending"
-# "1" (default) → add an inline engagement poll (callback vote buttons mirroring the
-# outcomes, with a live tally) to each channel card — same message, under the bet
-# buttons. Sentiment/social-proof only; betting stays on the deep-link bet buttons.
-NEWS_POLL_KEY = "news_poll"
 
 
 async def crawl_job(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -156,7 +152,7 @@ async def _channel_chat_id(session) -> int | None:
 
 
 async def _publish_one(bot, item_id: int, *, chat_id: int, lang: str,
-                       bot_username: str | None, with_poll: bool = False) -> None:
+                       bot_username: str | None) -> None:
     """Publish one item with at-most-once delivery: CLAIM the (item,chat,lang)
     slot (committed) BEFORE the irreversible send, then finalize. A concurrent or
     crashed run is reconciled, never re-sent — a duplicate channel post is worse
@@ -182,7 +178,7 @@ async def _publish_one(bot, item_id: int, *, chat_id: int, lang: str,
 
     # 2) send OUTSIDE any transaction (no DB connection held across network I/O)
     msg_id = await publisher.post_item_to_channel(bot, snap, chat_id=chat_id, lang=lang,
-                                                  bot_username=bot_username, with_poll=with_poll)
+                                                  bot_username=bot_username)
 
     # 3) finalize
     async with async_session_scope() as session:
@@ -205,11 +201,9 @@ async def publish_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     async with async_session_scope() as session:
         chat_id = await _channel_chat_id(session)
         ready_ids = []
-        with_poll = False
         if chat_id is not None:
             # bet-relevant only (default): withhold items without a matched market
             require_market = (await appconfig.get(session, "news_require_market", "1")) != "0"
-            with_poll = (await appconfig.get(session, NEWS_POLL_KEY, "1")) != "0"
             rows = await items_repo.ready_to_publish(session, limit=10, require_market=require_market)
             ready_ids = [i.id for i in rows]
     if not ready_ids:
@@ -221,7 +215,7 @@ async def publish_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     for item_id in ready_ids:
         try:
             await _publish_one(context.bot, item_id, chat_id=chat_id, lang=lang,
-                               bot_username=bot_username, with_poll=with_poll)
+                               bot_username=bot_username)
         except Exception:  # noqa: BLE001 — isolate one bad item, keep publishing the rest
             logger.exception("news publish failed for item %s; left for retry", item_id)
 

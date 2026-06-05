@@ -1,9 +1,9 @@
 """Shared "is this headline sensitive?" gate for the news voice.
 
 Conservative keyword check (war / death / disaster / violence). Used to switch the
-playful poll labels (publisher) AND the headline/summary editorial tone (render)
-OFF, so the funny voice never lands on a tragedy. A category/LLM classifier would
-be a better upgrade later — this is the deterministic floor.
+headline/summary editorial tone (render) OFF, so the funny voice never lands on a
+tragedy. A category/LLM classifier would be a better upgrade later — this is the
+deterministic floor.
 """
 
 from __future__ import annotations

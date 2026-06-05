@@ -21,8 +21,6 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import BadRequest, TelegramError
 
 from bot.news import cta as cta_mod
-from bot.news.sensitivity import is_sensitive
-from core.config import settings
 from core.i18n import t
 
 logger = logging.getLogger(__name__)
@@ -183,67 +181,7 @@ def build_digest(items, *, lang: str, header: str, bot_username: str | None = No
     return "\n\n".join(blocks)
 
 
-def _house_pair(lang: str, spice: int) -> tuple[str, str] | None:
-    """The funny (yes, no) poll-button pair for a binary market, or None to keep the
-    neutral Yes/No. EN-only: polls are channel-only and the channel is English, so we
-    never ship English profanity to a (hypothetical) non-EN channel."""
-    if lang != "en":
-        return None
-    if spice >= 2:
-        return ("Hell Yeah!", "Fuck No!")   # spicy flagship (EN channel only)
-    return ("HELL YEAH", "HELL NO")          # spice 1: bold but clean + translatable
-
-
-def poll_labels(item, outcomes: list[dict], *, lang: str, spice: int) -> list[str]:
-    """DISPLAY labels for the sentiment-poll buttons only (the bet buttons keep
-    ``_outcome_text``). A binary Yes/No market gets the funny house pair; multi-
-    outcome markets keep their real candidate/bucket labels; sensitive items and
-    spice<=0 stay neutral. Vote attribution is unaffected — it is keyed by INDEX."""
-    real = [(o.get("label") or "?").strip() for o in outcomes]
-    if spice <= 0 or is_sensitive(getattr(item, "title_orig", None)):
-        return real
-    pair = _house_pair(lang, spice)
-    if pair and len(real) == 2 and {real[0].lower(), real[1].lower()} == {"yes", "no"}:
-        out = list(real)
-        yi = 0 if real[0].lower() == "yes" else 1
-        out[yi], out[1 - yi] = pair[0], pair[1]
-        return out
-    return real
-
-
-def _vote_text(label: str, count: int, total: int) -> str:
-    """Label for an inline engagement-poll vote button: '🗳 Yes' before any votes,
-    '🗳 Yes · 62%' once the tally has data (share of all votes on this item)."""
-    base = f"🗳 {(label or '?').strip()}"
-    return f"{base} · {round(count / total * 100)}%" if total else base
-
-
-def vote_callback_data(item_id: int, index: int) -> str:
-    """Callback payload for a poll vote button (well under Telegram's 64-byte cap).
-    Only the item id + a small outcome index travel; the vote maps to
-    ``cta_outcomes[index]`` server-side, the same index the bet button uses."""
-    return f"nv:{item_id}:{int(index)}"
-
-
-def _poll_rows(item, outcomes: list[dict], tallies: dict[int, int] | None,
-               *, lang: str, spice: int) -> list[list[InlineKeyboardButton]]:
-    """Inline engagement-poll vote buttons (sentiment/social-proof), laid out 2-up
-    so they stay compact under the full-width bet buttons. One button per outcome,
-    BY INDEX (so a vote maps to the same ``cta_outcomes[i]`` the bet button does);
-    DISPLAY labels may be the funny house pair (see :func:`poll_labels`) but the
-    callback is index-keyed, so the vibe voice never affects vote attribution."""
-    counts = tallies or {}
-    total = sum(counts.values())
-    labels = poll_labels(item, outcomes, lang=lang, spice=spice)
-    buttons = [InlineKeyboardButton(_vote_text(labels[i], counts.get(i, 0), total),
-                                    callback_data=vote_callback_data(item.id, i))
-               for i in range(len(outcomes))]
-    return [buttons[j:j + 2] for j in range(0, len(buttons), 2)]
-
-
-def build_keyboard(item, *, bot_username: str | None, lang: str,
-                   with_poll: bool = False, tallies: dict[int, int] | None = None,
-                   poll_spice: int | None = None) -> InlineKeyboardMarkup | None:
+def build_keyboard(item, *, bot_username: str | None, lang: str) -> InlineKeyboardMarkup | None:
     # When the item has resolved bet outcomes AND we know our bot username, surface a
     # button per outcome with live odds — Yes/No for a binary market, or the event's
     # real choices (candidates / price buckets) for a multi-outcome event. The
@@ -256,11 +194,6 @@ def build_keyboard(item, *, bot_username: str | None, lang: str,
         rows = [[InlineKeyboardButton(_outcome_text(o),
                                       url=cta_mod.bet_deeplink(bot_username, item_id=item.id, index=i))]
                 for i, o in enumerate(outcomes)]
-        if with_poll:
-            # …then the engagement poll, INLINE on the same card (callback vote
-            # buttons), so there's one message instead of a separate poll reply.
-            spice = settings.news_poll_spice if poll_spice is None else poll_spice
-            rows.extend(_poll_rows(item, outcomes, tallies, lang=lang, spice=spice))
         return InlineKeyboardMarkup(rows)
     url = item.cta_url or (cta_mod.news_deeplink(bot_username, item_id=item.id) if bot_username else None)
     if not url:
@@ -280,13 +213,11 @@ async def channel_is_admin(bot, chat_id: int) -> bool:
         return False
 
 
-async def _send_card(bot, item, *, chat_id: int, lang: str, bot_username: str | None,
-                     with_poll: bool = False) -> int | None:
-    """Send the news card (photo/text + caption + bet buttons, plus the inline
-    engagement-poll vote buttons when ``with_poll``). Returns the message_id, or None
-    on a transient failure. A parse failure NEVER returns None — it falls back to a
-    plain-text send so the item can't get stuck."""
-    kb = build_keyboard(item, bot_username=bot_username, lang=lang, with_poll=with_poll)
+async def _send_card(bot, item, *, chat_id: int, lang: str, bot_username: str | None) -> int | None:
+    """Send the news card (photo/text + caption + bet buttons). Returns the message_id,
+    or None on a transient failure. A parse failure NEVER returns None — it falls back
+    to a plain-text send so the item can't get stuck."""
+    kb = build_keyboard(item, bot_username=bot_username, lang=lang)
 
     if item.hero_image_url:
         caption = build_caption(item, lang=lang, cap=_CAPTION_CAP)
@@ -319,13 +250,8 @@ async def _send_card(bot, item, *, chat_id: int, lang: str, bot_username: str | 
 
 
 async def post_item_to_channel(bot, item, *, chat_id: int, lang: str,
-                               bot_username: str | None, with_poll: bool = False) -> int | None:
-    """Send one item to the channel as a SINGLE news card. When ``with_poll`` and the
-    item has resolved outcomes, the card carries the inline engagement poll as
-    callback vote buttons under the bet buttons (sentiment/social proof) — one
-    message, not a separate poll reply. Votes are tallied live and the card's
-    keyboard re-renders on each tap (see ``bot.handlers.news.on_news_vote``).
+                               bot_username: str | None) -> int | None:
+    """Send one item to the channel as a SINGLE news card (caption + bet buttons).
     Returns the card's message_id (the at-most-once anchor), or None on a transient
     failure (item left for retry)."""
-    return await _send_card(bot, item, chat_id=chat_id, lang=lang,
-                            bot_username=bot_username, with_poll=with_poll)
+    return await _send_card(bot, item, chat_id=chat_id, lang=lang, bot_username=bot_username)

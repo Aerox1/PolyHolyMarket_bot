@@ -143,7 +143,7 @@ def test_source_create_toggle_delete(client):
 def test_settings_save(client):
     token = _login(client, superadmin=True)
     r = _post(client, "/news/settings", token, channel_id="-1001234567890", top_n="7",
-              autosend="true", poll="true")
+              autosend="true")
     assert r.status_code in (302, 303)
     from dashboard import repo
     with SessionLocal() as s:
@@ -151,7 +151,6 @@ def test_settings_save(client):
         assert cfg["channel_id"] == "-1001234567890"
         assert cfg["top_n"] == 7
         assert cfg["autosend"] is True
-        assert cfg["poll"] is True
 
 
 def test_settings_save_requires_superadmin(client):
