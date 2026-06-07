@@ -227,6 +227,12 @@
       "bet_unavailable": "⚠️ Couldn't load this market right now. Please try again in a moment.",
       "bet_pick_wallet": "Which wallet?",
       "vote_recorded": "🗳 Voted: {outcome}"
+    },
+    "access": {
+      "prompt": "🔒 This bot is invite-only right now.\nSend your *access code* to get in (or a friend's referral code).",
+      "granted": "✅ You're in! Tap /start to begin.",
+      "invalid": "❌ That code isn't valid. Check it and try again.",
+      "rate_limited": "⏳ Too many attempts. Please wait a minute, then try again."
     }
   },
   "dash": {
@@ -361,7 +367,12 @@
       "language": "Language",
       "last_login": "Last login",
       "role": "Role",
-      "superadmin": "Superadmin"
+      "superadmin": "Superadmin",
+      "access_title": "Access gate",
+      "access_code": "Access code",
+      "access_enabled": "Require an access code for new users",
+      "access_help": "New users must enter this code (or a user's referral code) to use the bot. Existing users are unaffected.",
+      "access_save": "Save access settings"
     },
     "miniapp": {
       "title": "Mini App",

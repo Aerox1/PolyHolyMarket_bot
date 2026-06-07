@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     # Ignore system/env proxies for Telegram (a macOS system proxy / VPN otherwise
     # drops PTB's connections). Set true only if you MUST route via a proxy.
     telegram_trust_env: bool = Field(False, alias="TELEGRAM_TRUST_ENV")
+    # Invite-code access gate for NEW users (default ON). The live on/off + the code
+    # are admin-editable in app_config (this is just the fallback default when unset).
+    access_gate_enabled: bool = Field(True, alias="ACCESS_GATE_ENABLED")
 
     # ── Encryption ────────────────────────────────────────
     encryption_key: str = Field("", alias="ENCRYPTION_KEY")

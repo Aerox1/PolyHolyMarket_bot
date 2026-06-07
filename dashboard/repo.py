@@ -682,3 +682,19 @@ def set_news_settings(db: Session, *, channel_id: str, top_n: int, autosend: boo
     appconfig.set_sync(db, NEWS_CHANNEL_ID, (channel_id or "").strip())
     appconfig.set_sync(db, NEWS_TOP_N, str(max(1, min(int(top_n), 20))))
     appconfig.set_sync(db, NEWS_AUTOSEND, "1" if autosend else "0")
+
+
+# ── access gate (invite code for new users) ───────────────────────────────────
+
+def access_settings(db: Session) -> dict:
+    return {
+        "enabled": appconfig.get_sync(
+            db, appconfig.ACCESS_GATE_ENABLED, "1" if settings.access_gate_enabled else "0") != "0",
+        "code": (appconfig.get_sync(db, appconfig.ACCESS_CODE, appconfig.DEFAULT_ACCESS_CODE)
+                 or appconfig.DEFAULT_ACCESS_CODE),
+    }
+
+
+def set_access_settings(db: Session, *, code: str, enabled: bool) -> None:
+    appconfig.set_sync(db, appconfig.ACCESS_CODE, (code or "").strip() or appconfig.DEFAULT_ACCESS_CODE)
+    appconfig.set_sync(db, appconfig.ACCESS_GATE_ENABLED, "1" if enabled else "0")

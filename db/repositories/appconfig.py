@@ -13,6 +13,9 @@ from db.models import AppConfig
 
 GEMINI_WEEKLY_BUDGET = "gemini_weekly_budget_usd"        # paid Gemini IMAGE budget
 NEWS_TEXT_WEEKLY_BUDGET = "news_text_weekly_budget_usd"  # news TEXT budget (0 = unlimited)
+ACCESS_GATE_ENABLED = "access_gate_enabled"              # "1"/"0": invite-code gate for new users
+ACCESS_CODE = "access_code"                              # the global access code (default below)
+DEFAULT_ACCESS_CODE = "POLYHOLY"
 
 
 # ── async (webapp / worker) ───────────────────────────────────────────────────

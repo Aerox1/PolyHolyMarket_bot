@@ -34,6 +34,9 @@ os.environ["GEMINI_API_KEY"] = ""
 # The dedicated tests/test_claude_text.py exercises the Claude path with the SDK
 # call mocked.
 os.environ["NEWS_TEXT_PROVIDER"] = "gemini"
+# Invite-code access gate defaults ON in prod; keep it OFF for the suite so existing
+# middleware/handler tests aren't gated. The dedicated gate tests enable it explicitly.
+os.environ["ACCESS_GATE_ENABLED"] = "false"
 os.environ["CLAUDE_CLI_PATH"] = ""
 os.environ["TELEGRAM_BOT_TOKEN"] = "test-token"
 # Disable SQLite WAL in tests: WAL gives the sync + async engines divergent read

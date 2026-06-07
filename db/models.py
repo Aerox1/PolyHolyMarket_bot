@@ -96,6 +96,8 @@ class User(Base):
     # ── referral ──
     referral_code: Mapped[str | None] = mapped_column(String(32), unique=True, index=True)
     referred_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="SET NULL"))
+    # ── access gate ── (invite-code gate for new users; existing users grandfathered)
+    access_granted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     accounts: Mapped[list["Account"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     settings: Mapped["UserSettings | None"] = relationship(back_populates="user", cascade="all, delete-orphan", uselist=False)

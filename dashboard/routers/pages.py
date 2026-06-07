@@ -410,5 +410,21 @@ def miniapp_curate(
 def settings_page(
     request: Request,
     admin: Admin = Depends(require_admin),
+    db: Session = Depends(get_db),
 ):
-    return deps.render(request, "settings.html", admin=admin)
+    return deps.render(request, "settings.html", admin=admin, access=repo.access_settings(db))
+
+
+@router.post("/settings/access")
+def settings_access_save(
+    request: Request,
+    access_code: str = Form(""),
+    access_enabled: bool = Form(False),
+    admin: Admin = Depends(require_superadmin),
+    db: Session = Depends(get_db),
+    _csrf: None = Depends(verify_csrf),
+):
+    repo.set_access_settings(db, code=access_code, enabled=access_enabled)
+    audit.record(db, AuditEvent.ACCESS_SETTINGS_SET, actor_type="admin", actor_id=admin.id,
+                 detail={"enabled": access_enabled, "code_set": bool(access_code.strip())})
+    return RedirectResponse("/settings", status_code=HTTP_303_SEE_OTHER)

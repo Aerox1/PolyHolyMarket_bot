@@ -44,5 +44,24 @@
     </div>
   </div>
 
+  {% if admin.is_superadmin and access is defined %}
+  <div class="card">
+    <div class="card-header"><h2>{{ t('dash.settings.access_title') }}</h2></div>
+    <div class="card-body">
+      <form method="POST" action="/settings/access">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <label>
+          <input type="checkbox" name="access_enabled" value="true" {% if access.enabled %}checked{% endif %}>
+          {{ t('dash.settings.access_enabled') }}
+        </label>
+        <label>{{ t('dash.settings.access_code') }}<br>
+          <input type="text" name="access_code" value="{{ access.code }}" autocomplete="off"></label>
+        <p class="muted">{{ t('dash.settings.access_help') }}</p>
+        <button class="btn success" type="submit">{{ t('dash.settings.access_save') }}</button>
+      </form>
+    </div>
+  </div>
+  {% endif %}
+
   <div class="notice warn">{{ t('dash.settings.keys_note') }}</div>
 {% endblock %}

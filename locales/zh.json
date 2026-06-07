@@ -227,6 +227,12 @@
       "bet_unavailable": "⚠️ 暂时无法加载该市场，请稍后再试。",
       "bet_pick_wallet": "用哪个钱包？",
       "vote_recorded": "🗳 已投票：{outcome}"
+    },
+    "access": {
+      "prompt": "🔒 本机器人目前仅限邀请。\n请发送你的*访问码*（或好友的推荐码）以进入。",
+      "granted": "✅ 已通过！点击 /start 开始。",
+      "invalid": "❌ 访问码无效，请检查后重试。",
+      "rate_limited": "⏳ 尝试次数过多，请等待一分钟后重试。"
     }
   },
   "dash": {
@@ -361,7 +367,12 @@
       "language": "语言",
       "last_login": "上次登录",
       "role": "角色",
-      "superadmin": "超级管理员"
+      "superadmin": "超级管理员",
+      "access_title": "访问门控",
+      "access_code": "访问码",
+      "access_enabled": "要求新用户输入访问码",
+      "access_help": "新用户必须输入此访问码（或某用户的推荐码）才能使用机器人。现有用户不受影响。",
+      "access_save": "保存访问设置"
     },
     "miniapp": {
       "back": "← 返回小程序",
